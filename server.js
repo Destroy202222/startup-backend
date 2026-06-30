@@ -6,21 +6,31 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
-
+ 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Middleware
+ 
+// ===== НАСТРОЙКИ =====
+// Включаем детальное логирование для отладки
+app.use((req, res, next) => {
+    console.log(`📥 ${req.method} ${req.url}`);
+    if (req.method === 'POST' || req.method === 'PUT') {
+        console.log('📦 Body:', req.body);
+    }
+    next();
+});
+ 
+// CORS - разрешаем все запросы (для разработки)
 app.use(cors({
     origin: '*',
     credentials: true
 }));
+ 
 app.use(express.json());
-
-// Путь к файлу базы данных
+ 
+// ===== БАЗА ДАННЫХ =====
 const DB_PATH = path.join(__dirname, 'database', 'db.json');
-
-// Инициализация базы данных
+ 
 function initDB() {
     const dbDir = path.join(__dirname, 'database');
     if (!fs.existsSync(dbDir)) {
@@ -31,72 +41,68 @@ function initDB() {
         const initialDB = {
             users: [],
             servers: [],
-            admins: [],
-            stats: {
-                totalMatches: 0,
-                totalTournaments: 0,
-                onlineCount: 0
-            }
+            admins: ['admin@startup.ru'],
+            stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 }
         };
         fs.writeFileSync(DB_PATH, JSON.stringify(initialDB, null, 2));
+        console.log('✅ База данных создана');
     }
 }
-
-// Чтение базы данных
+ 
 function readDB() {
     try {
         const data = fs.readFileSync(DB_PATH, 'utf8');
         return JSON.parse(data);
     } catch (error) {
-        console.error('Error reading DB:', error);
-        return { users: [], servers: [], admins: [], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 } };
+        console.error('❌ Ошибка чтения БД:', error);
+        return { users: [], servers: [], admins: ['admin@startup.ru'], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 } };
     }
 }
-
-// Запись в базу данных
+ 
 function writeDB(data) {
     try {
         fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
         return true;
     } catch (error) {
-        console.error('Error writing DB:', error);
+        console.error('❌ Ошибка записи БД:', error);
         return false;
     }
 }
-
-// Вспомогательные функции
+ 
+// ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
 function findUserByEmail(email) {
     const db = readDB();
     return db.users.find(u => u.email === email);
 }
-
+ 
 function findUserByVKId(vkId) {
     const db = readDB();
     return db.users.find(u => u.vkId === vkId);
 }
-
+ 
 function findUserByUsername(username) {
     const db = readDB();
     return db.users.find(u => u.username === username);
 }
-
+ 
 function generateToken(user) {
     return jwt.sign(
         { id: user.id, email: user.email, username: user.username },
-        process.env.JWT_SECRET,
+        process.env.JWT_SECRET || 'default_secret_key_change_me',
         { expiresIn: '7d' }
     );
 }
-
+ 
 function verifyToken(token) {
     try {
-        return jwt.verify(token, process.env.JWT_SECRET);
+        return jwt.verify(token, process.env.JWT_SECRET || 'default_secret_key_change_me');
     } catch (error) {
+        console.error('❌ Ошибка верификации токена:', error.message);
         return null;
     }
 }
-
-// Middleware для проверки токена
+ 
+// ===== MIDDLEWARE =====
 function authMiddleware(req, res, next) {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
@@ -111,8 +117,7 @@ function authMiddleware(req, res, next) {
     req.user = decoded;
     next();
 }
-
-// Middleware для проверки прав администратора
+ 
 function adminMiddleware(req, res, next) {
     const db = readDB();
     const user = db.users.find(u => u.id === req.user.id);
@@ -121,56 +126,76 @@ function adminMiddleware(req, res, next) {
     }
     next();
 }
-
+ 
 // ===== АУТЕНТИФИКАЦИЯ =====
-
-// Регистрация
+ 
+// ===== РЕГИСТРАЦИЯ (исправленная) =====
 app.post('/api/auth/register', async (req, res) => {
+    console.log('📝 Запрос на регистрацию получен');
+    console.log('📦 Тело запроса:', req.body);
+    
     try {
         const { username, email, standoffId, password } = req.body;
         
-        // Валидация
+        // ПРОВЕРКА 1: Все поля обязательны
         if (!username || !email || !standoffId || !password) {
-            return res.status(400).json({ error: 'Все поля обязательны для заполнения' });
+            console.log('❌ Ошибка: не все поля заполнены');
+            return res.status(400).json({ 
+                error: 'Все поля обязательны для заполнения',
+                details: { username: !!username, email: !!email, standoffId: !!standoffId, password: !!password }
+            });
         }
         
+        // ПРОВЕРКА 2: Длина имени
         if (username.length < 3 || username.length > 20) {
+            console.log(`❌ Ошибка: имя "${username}" имеет неверную длину (${username.length})`);
             return res.status(400).json({ error: 'Имя должно содержать от 3 до 20 символов' });
         }
         
+        // ПРОВЕРКА 3: Формат email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            return res.status(400).json({ error: 'Неверный формат email' });
+            console.log(`❌ Ошибка: email "${email}" имеет неверный формат`);
+            return res.status(400).json({ error: 'Введите корректный email' });
         }
         
+        // ПРОВЕРКА 4: ID только цифры
         if (!/^\d+$/.test(standoffId)) {
+            console.log(`❌ Ошибка: ID "${standoffId}" содержит не только цифры`);
             return res.status(400).json({ error: 'ID Standoff 2 должен содержать только цифры' });
         }
         
+        // ПРОВЕРКА 5: Длина пароля
         if (password.length < 8) {
+            console.log(`❌ Ошибка: пароль слишком короткий (${password.length})`);
             return res.status(400).json({ error: 'Пароль должен содержать минимум 8 символов' });
         }
         
+        // ПРОВЕРКА 6: Проверяем, не занят ли email
         const db = readDB();
-        
-        // Проверка на существование пользователя
         if (findUserByEmail(email)) {
+            console.log(`❌ Ошибка: email "${email}" уже занят`);
             return res.status(400).json({ error: 'Пользователь с таким email уже существует' });
         }
         
+        // ПРОВЕРКА 7: Проверяем, не занято ли имя
         if (findUserByUsername(username)) {
+            console.log(`❌ Ошибка: имя "${username}" уже занято`);
             return res.status(400).json({ error: 'Пользователь с таким именем уже существует' });
         }
         
+        // ПРОВЕРКА 8: Проверяем, не занят ли ID
         const existingStandoffId = db.users.find(u => u.standoffId === standoffId);
         if (existingStandoffId) {
+            console.log(`❌ Ошибка: ID "${standoffId}" уже занят`);
             return res.status(400).json({ error: 'Пользователь с таким ID Standoff 2 уже существует' });
         }
         
-        // Хеширование пароля
+        // ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ - СОЗДАЕМ ПОЛЬЗОВАТЕЛЯ
+        console.log('✅ Все проверки пройдены, создаем пользователя...');
+        
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        // Создание пользователя
         const newUser = {
             id: uuidv4(),
             username,
@@ -188,9 +213,11 @@ app.post('/api/auth/register', async (req, res) => {
         
         db.users.push(newUser);
         writeDB(db);
+        console.log(`✅ Пользователь "${username}" успешно создан (ID: ${newUser.id})`);
         
-        // Генерация токена
+        // Генерируем токен
         const token = generateToken(newUser);
+        console.log('✅ Токен сгенерирован');
         
         res.json({
             success: true,
@@ -206,32 +233,44 @@ app.post('/api/auth/register', async (req, res) => {
                 kdHistory: newUser.kdHistory
             }
         });
+        
     } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Ошибка сервера при регистрации' });
+        console.error('❌ Критическая ошибка при регистрации:', error);
+        console.error('📋 Стек ошибки:', error.stack);
+        res.status(500).json({ 
+            error: 'Ошибка сервера при регистрации',
+            message: error.message 
+        });
     }
 });
-
-// Вход
+ 
+// ===== ВХОД =====
 app.post('/api/auth/login', async (req, res) => {
+    console.log('📝 Запрос на вход получен');
+    console.log('📦 Тело запроса:', req.body);
+    
     try {
         const { email, password } = req.body;
         
         if (!email || !password) {
+            console.log('❌ Ошибка: не заполнены email или пароль');
             return res.status(400).json({ error: 'Email и пароль обязательны' });
         }
         
         const user = findUserByEmail(email);
         if (!user) {
+            console.log(`❌ Ошибка: пользователь с email "${email}" не найден`);
             return res.status(401).json({ error: 'Неверный email или пароль' });
         }
         
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
+            console.log(`❌ Ошибка: неверный пароль для пользователя "${email}"`);
             return res.status(401).json({ error: 'Неверный email или пароль' });
         }
         
-        // Обновляем время последнего входа
+        console.log(`✅ Пользователь "${user.username}" успешно вошел`);
+        
         const db = readDB();
         const userIndex = db.users.findIndex(u => u.id === user.id);
         if (userIndex !== -1) {
@@ -256,12 +295,12 @@ app.post('/api/auth/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Ошибка сервера при входе' });
+        console.error('❌ Ошибка при входе:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-// Авторизация через VK
+ 
+// ===== ВХОД ЧЕРЕЗ VK =====
 app.post('/api/auth/vk', async (req, res) => {
     try {
         const { vkId, vkName, vkAvatar } = req.body;
@@ -270,16 +309,14 @@ app.post('/api/auth/vk', async (req, res) => {
             return res.status(400).json({ error: 'ID VK обязателен' });
         }
         
+        console.log(`📝 VK авторизация: ${vkName} (${vkId})`);
+        
         let user = findUserByVKId(vkId);
-        let isNewUser = false;
         const db = readDB();
         
         if (!user) {
-            // Создаем нового пользователя
+            console.log('👤 Создаем нового пользователя через VK');
             const username = vkName.replace(/\s/g, '_').toLowerCase();
-            const email = `${vkId}@vk.com`;
-            
-            // Проверяем, не занят ли username
             let finalUsername = username;
             let counter = 1;
             while (findUserByUsername(finalUsername)) {
@@ -290,7 +327,7 @@ app.post('/api/auth/vk', async (req, res) => {
             const newUser = {
                 id: uuidv4(),
                 username: finalUsername,
-                email,
+                email: `${vkId}@vk.com`,
                 standoffId: vkId.toString().slice(0, 9),
                 password: await bcrypt.hash(`vk_${vkId}`, 10),
                 vkId: vkId.toString(),
@@ -306,9 +343,9 @@ app.post('/api/auth/vk', async (req, res) => {
             db.users.push(newUser);
             writeDB(db);
             user = newUser;
-            isNewUser = true;
+            console.log(`✅ VK пользователь "${finalUsername}" создан`);
         } else {
-            // Обновляем время последнего входа
+            console.log(`✅ VK пользователь найден: ${user.username}`);
             const userIndex = db.users.findIndex(u => u.id === user.id);
             if (userIndex !== -1) {
                 db.users[userIndex].lastLogin = new Date().toISOString();
@@ -321,7 +358,6 @@ app.post('/api/auth/vk', async (req, res) => {
         res.json({
             success: true,
             token,
-            isNewUser,
             user: {
                 id: user.id,
                 username: user.username,
@@ -336,12 +372,12 @@ app.post('/api/auth/vk', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('VK auth error:', error);
-        res.status(500).json({ error: 'Ошибка сервера при авторизации через VK' });
+        console.error('❌ VK auth error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-// Получение текущего пользователя
+ 
+// ===== ПОЛУЧЕНИЕ ДАННЫХ ПОЛЬЗОВАТЕЛЯ =====
 app.get('/api/auth/me', authMiddleware, (req, res) => {
     try {
         const db = readDB();
@@ -366,31 +402,28 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
             lastLogin: user.lastLogin
         });
     } catch (error) {
-        console.error('Get user error:', error);
+        console.error('❌ Get user error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
+ 
 // ===== СЕРВЕРА =====
-
-// Получение всех серверов
 app.get('/api/servers', (req, res) => {
     try {
         const db = readDB();
         res.json(db.servers);
     } catch (error) {
-        console.error('Get servers error:', error);
+        console.error('❌ Get servers error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-// Создание сервера (только для админов)
+ 
 app.post('/api/servers', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const { name, lobby, playerId, map } = req.body;
         
         if (!name || !lobby || !playerId || !map) {
-            return res.status(400).json({ error: 'Все поля обязательны для заполнения' });
+            return res.status(400).json({ error: 'Все поля обязательны' });
         }
         
         const db = readDB();
@@ -410,12 +443,11 @@ app.post('/api/servers', authMiddleware, adminMiddleware, (req, res) => {
         
         res.json({ success: true, server: newServer });
     } catch (error) {
-        console.error('Create server error:', error);
-        res.status(500).json({ error: 'Ошибка сервера при создании сервера' });
+        console.error('❌ Create server error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-// Удаление сервера (только для админов)
+ 
 app.delete('/api/servers/:id', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const serverId = parseInt(req.params.id);
@@ -426,25 +458,22 @@ app.delete('/api/servers/:id', authMiddleware, adminMiddleware, (req, res) => {
         
         res.json({ success: true });
     } catch (error) {
-        console.error('Delete server error:', error);
-        res.status(500).json({ error: 'Ошибка сервера при удалении сервера' });
+        console.error('❌ Delete server error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
+ 
 // ===== АДМИНЫ =====
-
-// Получение списка администраторов
 app.get('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const db = readDB();
         res.json(db.admins);
     } catch (error) {
-        console.error('Get admins error:', error);
+        console.error('❌ Get admins error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-// Добавление администратора
+ 
 app.post('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const { email } = req.body;
@@ -461,7 +490,7 @@ app.post('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
         }
         
         if (db.admins.includes(email)) {
-            return res.status(400).json({ error: 'Пользователь уже является администратором' });
+            return res.status(400).json({ error: 'Уже администратор' });
         }
         
         db.admins.push(email);
@@ -469,12 +498,11 @@ app.post('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
         
         res.json({ success: true, admins: db.admins });
     } catch (error) {
-        console.error('Add admin error:', error);
+        console.error('❌ Add admin error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-// Удаление администратора
+ 
 app.delete('/api/admins/:email', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const email = decodeURIComponent(req.params.email);
@@ -485,14 +513,12 @@ app.delete('/api/admins/:email', authMiddleware, adminMiddleware, (req, res) => 
         
         res.json({ success: true, admins: db.admins });
     } catch (error) {
-        console.error('Remove admin error:', error);
+        console.error('❌ Remove admin error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
+ 
 // ===== СТАТИСТИКА =====
-
-// Обновление статистики игрока
 app.post('/api/users/:userId/stats', authMiddleware, (req, res) => {
     try {
         const userId = req.params.userId;
@@ -514,7 +540,6 @@ app.post('/api/users/:userId/stats', authMiddleware, (req, res) => {
         user.deaths += deaths || 0;
         user.matches += 1;
         
-        // Обновляем историю KD
         const kd = user.deaths > 0 ? (user.kills / user.deaths) : user.kills;
         user.kdHistory.push(parseFloat(kd.toFixed(2)));
         if (user.kdHistory.length > 10) {
@@ -535,14 +560,12 @@ app.post('/api/users/:userId/stats', authMiddleware, (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Update stats error:', error);
+        console.error('❌ Update stats error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
+ 
 // ===== ТОП ИГРОКОВ =====
-
-// Получение топа игроков
 app.get('/api/top-players', (req, res) => {
     try {
         const db = readDB();
@@ -559,18 +582,16 @@ app.get('/api/top-players', (req, res) => {
         
         res.json(topPlayers);
     } catch (error) {
-        console.error('Get top players error:', error);
+        console.error('❌ Get top players error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
+ 
 // ===== СТАТИСТИКА САЙТА =====
-
-// Получение общей статистики
 app.get('/api/stats', (req, res) => {
     try {
         const db = readDB();
-        const onlineCount = Math.floor(Math.random() * 150) + 50; // Имитация онлайна
+        const onlineCount = Math.floor(Math.random() * 150) + 50;
         
         res.json({
             online: onlineCount,
@@ -579,16 +600,25 @@ app.get('/api/stats', (req, res) => {
             totalUsers: db.users.length
         });
     } catch (error) {
-        console.error('Get stats error:', error);
+        console.error('❌ Get stats error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-// ===== ЗАПУСК СЕРВЕРА =====
-
+ 
+// ===== ЗАПУСК =====
 initDB();
-
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📁 Database path: ${DB_PATH}`);
+ 
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📁 Database: ${DB_PATH}`);
+    console.log(`🔐 JWT_SECRET: ${process.env.JWT_SECRET ? '✅ Установлен' : '❌ НЕ УСТАНОВЛЕН (используется default)'}`);
+});
+ 
+// Обработка необработанных ошибок
+process.on('uncaughtException', (error) => {
+    console.error('🔥 Необработанное исключение:', error);
+});
+ 
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🔥 Необработанный rejection:', reason);
 });
