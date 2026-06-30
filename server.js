@@ -11,22 +11,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
  
 // ===== НАСТРОЙКИ =====
-// Включаем детальное логирование для отладки
-app.use((req, res, next) => {
-    console.log(`📥 ${req.method} ${req.url}`);
-    if (req.method === 'POST' || req.method === 'PUT') {
-        console.log('📦 Body:', req.body);
-    }
-    next();
-});
- 
-// CORS - разрешаем все запросы (для разработки)
 app.use(cors({
     origin: '*',
     credentials: true
 }));
- 
 app.use(express.json());
+ 
+// ===== СУПЕР-АДМИН (email, который будет автоматически добавлен) =====
+const SUPER_ADMIN_EMAIL = 'startup@mail.ru';
  
 // ===== БАЗА ДАННЫХ =====
 const DB_PATH = path.join(__dirname, 'database', 'db.json');
@@ -37,15 +29,27 @@ function initDB() {
         fs.mkdirSync(dbDir, { recursive: true });
     }
     
+    let db;
     if (!fs.existsSync(DB_PATH)) {
-        const initialDB = {
+        db = {
             users: [],
             servers: [],
-            admins: ['admin@startup.ru'],
+            admins: [SUPER_ADMIN_EMAIL], // Автоматически добавляем супер-админа
             stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 }
         };
-        fs.writeFileSync(DB_PATH, JSON.stringify(initialDB, null, 2));
-        console.log('✅ База данных создана');
+        fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+        console.log('✅ База данных создана с супер-админом:', SUPER_ADMIN_EMAIL);
+    } else {
+        // Проверяем, есть ли супер-админ в списке
+        db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+        if (!db.admins) {
+            db.admins = [];
+        }
+        if (!db.admins.includes(SUPER_ADMIN_EMAIL)) {
+            db.admins.push(SUPER_ADMIN_EMAIL);
+            fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+            console.log('✅ Супер-админ добавлен в существующую БД:', SUPER_ADMIN_EMAIL);
+        }
     }
 }
  
@@ -55,7 +59,7 @@ function readDB() {
         return JSON.parse(data);
     } catch (error) {
         console.error('❌ Ошибка чтения БД:', error);
-        return { users: [], servers: [], admins: ['admin@startup.ru'], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 } };
+        return { users: [], servers: [], admins: [SUPER_ADMIN_EMAIL], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 } };
     }
 }
  
@@ -121,78 +125,66 @@ function authMiddleware(req, res, next) {
 function adminMiddleware(req, res, next) {
     const db = readDB();
     const user = db.users.find(u => u.id === req.user.id);
-    if (!user || !db.admins.includes(user.email)) {
+    if (!user) {
+        return res.status(403).json({ error: 'Пользователь не найден' });
+    }
+    
+    // Проверяем, есть ли email пользователя в списке админов
+    // Или если это супер-админ
+    if (!db.admins.includes(user.email) && user.email !== SUPER_ADMIN_EMAIL) {
         return res.status(403).json({ error: 'Недостаточно прав' });
     }
+    
+    // Если пользователь - супер-админ, но его нет в списке - добавляем
+    if (user.email === SUPER_ADMIN_EMAIL && !db.admins.includes(user.email)) {
+        db.admins.push(user.email);
+        writeDB(db);
+        console.log('✅ Супер-админ добавлен в список через middleware');
+    }
+    
     next();
 }
  
 // ===== АУТЕНТИФИКАЦИЯ =====
- 
-// ===== РЕГИСТРАЦИЯ (исправленная) =====
 app.post('/api/auth/register', async (req, res) => {
-    console.log('📝 Запрос на регистрацию получен');
-    console.log('📦 Тело запроса:', req.body);
-    
     try {
         const { username, email, standoffId, password } = req.body;
         
-        // ПРОВЕРКА 1: Все поля обязательны
         if (!username || !email || !standoffId || !password) {
-            console.log('❌ Ошибка: не все поля заполнены');
-            return res.status(400).json({ 
-                error: 'Все поля обязательны для заполнения',
-                details: { username: !!username, email: !!email, standoffId: !!standoffId, password: !!password }
-            });
+            return res.status(400).json({ error: 'Все поля обязательны' });
         }
         
-        // ПРОВЕРКА 2: Длина имени
         if (username.length < 3 || username.length > 20) {
-            console.log(`❌ Ошибка: имя "${username}" имеет неверную длину (${username.length})`);
-            return res.status(400).json({ error: 'Имя должно содержать от 3 до 20 символов' });
+            return res.status(400).json({ error: 'Имя от 3 до 20 символов' });
         }
         
-        // ПРОВЕРКА 3: Формат email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            console.log(`❌ Ошибка: email "${email}" имеет неверный формат`);
-            return res.status(400).json({ error: 'Введите корректный email' });
+            return res.status(400).json({ error: 'Неверный email' });
         }
         
-        // ПРОВЕРКА 4: ID только цифры
         if (!/^\d+$/.test(standoffId)) {
-            console.log(`❌ Ошибка: ID "${standoffId}" содержит не только цифры`);
-            return res.status(400).json({ error: 'ID Standoff 2 должен содержать только цифры' });
+            return res.status(400).json({ error: 'ID только цифры' });
         }
         
-        // ПРОВЕРКА 5: Длина пароля
         if (password.length < 8) {
-            console.log(`❌ Ошибка: пароль слишком короткий (${password.length})`);
-            return res.status(400).json({ error: 'Пароль должен содержать минимум 8 символов' });
+            return res.status(400).json({ error: 'Пароль минимум 8 символов' });
         }
         
-        // ПРОВЕРКА 6: Проверяем, не занят ли email
         const db = readDB();
+        
         if (findUserByEmail(email)) {
-            console.log(`❌ Ошибка: email "${email}" уже занят`);
-            return res.status(400).json({ error: 'Пользователь с таким email уже существует' });
+            return res.status(400).json({ error: 'Email уже используется' });
         }
         
-        // ПРОВЕРКА 7: Проверяем, не занято ли имя
         if (findUserByUsername(username)) {
-            console.log(`❌ Ошибка: имя "${username}" уже занято`);
-            return res.status(400).json({ error: 'Пользователь с таким именем уже существует' });
+            return res.status(400).json({ error: 'Имя уже используется' });
         }
         
-        // ПРОВЕРКА 8: Проверяем, не занят ли ID
         const existingStandoffId = db.users.find(u => u.standoffId === standoffId);
         if (existingStandoffId) {
-            console.log(`❌ Ошибка: ID "${standoffId}" уже занят`);
-            return res.status(400).json({ error: 'Пользователь с таким ID Standoff 2 уже существует' });
+            return res.status(400).json({ error: 'ID Standoff 2 уже используется' });
         }
-        
-        // ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ - СОЗДАЕМ ПОЛЬЗОВАТЕЛЯ
-        console.log('✅ Все проверки пройдены, создаем пользователя...');
         
         const hashedPassword = await bcrypt.hash(password, 10);
         
@@ -212,12 +204,16 @@ app.post('/api/auth/register', async (req, res) => {
         };
         
         db.users.push(newUser);
-        writeDB(db);
-        console.log(`✅ Пользователь "${username}" успешно создан (ID: ${newUser.id})`);
         
-        // Генерируем токен
+        // Если регистрируется супер-админ - добавляем его в список админов
+        if (email === SUPER_ADMIN_EMAIL && !db.admins.includes(email)) {
+            db.admins.push(email);
+            console.log('✅ Супер-админ добавлен при регистрации:', email);
+        }
+        
+        writeDB(db);
+        
         const token = generateToken(newUser);
-        console.log('✅ Токен сгенерирован');
         
         res.json({
             success: true,
@@ -233,48 +229,41 @@ app.post('/api/auth/register', async (req, res) => {
                 kdHistory: newUser.kdHistory
             }
         });
-        
     } catch (error) {
-        console.error('❌ Критическая ошибка при регистрации:', error);
-        console.error('📋 Стек ошибки:', error.stack);
-        res.status(500).json({ 
-            error: 'Ошибка сервера при регистрации',
-            message: error.message 
-        });
+        console.error('❌ Registration error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
  
-// ===== ВХОД =====
 app.post('/api/auth/login', async (req, res) => {
-    console.log('📝 Запрос на вход получен');
-    console.log('📦 Тело запроса:', req.body);
-    
     try {
         const { email, password } = req.body;
         
         if (!email || !password) {
-            console.log('❌ Ошибка: не заполнены email или пароль');
             return res.status(400).json({ error: 'Email и пароль обязательны' });
         }
         
         const user = findUserByEmail(email);
         if (!user) {
-            console.log(`❌ Ошибка: пользователь с email "${email}" не найден`);
             return res.status(401).json({ error: 'Неверный email или пароль' });
         }
         
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
-            console.log(`❌ Ошибка: неверный пароль для пользователя "${email}"`);
             return res.status(401).json({ error: 'Неверный email или пароль' });
         }
-        
-        console.log(`✅ Пользователь "${user.username}" успешно вошел`);
         
         const db = readDB();
         const userIndex = db.users.findIndex(u => u.id === user.id);
         if (userIndex !== -1) {
             db.users[userIndex].lastLogin = new Date().toISOString();
+            
+            // Если супер-админ входит - убедимся, что он есть в списке админов
+            if (email === SUPER_ADMIN_EMAIL && !db.admins.includes(email)) {
+                db.admins.push(email);
+                console.log('✅ Супер-админ добавлен при входе:', email);
+            }
+            
             writeDB(db);
         }
         
@@ -295,12 +284,11 @@ app.post('/api/auth/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Ошибка при входе:', error);
+        console.error('❌ Login error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
  
-// ===== ВХОД ЧЕРЕЗ VK =====
 app.post('/api/auth/vk', async (req, res) => {
     try {
         const { vkId, vkName, vkAvatar } = req.body;
@@ -309,13 +297,10 @@ app.post('/api/auth/vk', async (req, res) => {
             return res.status(400).json({ error: 'ID VK обязателен' });
         }
         
-        console.log(`📝 VK авторизация: ${vkName} (${vkId})`);
-        
         let user = findUserByVKId(vkId);
         const db = readDB();
         
         if (!user) {
-            console.log('👤 Создаем нового пользователя через VK');
             const username = vkName.replace(/\s/g, '_').toLowerCase();
             let finalUsername = username;
             let counter = 1;
@@ -343,9 +328,7 @@ app.post('/api/auth/vk', async (req, res) => {
             db.users.push(newUser);
             writeDB(db);
             user = newUser;
-            console.log(`✅ VK пользователь "${finalUsername}" создан`);
         } else {
-            console.log(`✅ VK пользователь найден: ${user.username}`);
             const userIndex = db.users.findIndex(u => u.id === user.id);
             if (userIndex !== -1) {
                 db.users[userIndex].lastLogin = new Date().toISOString();
@@ -377,7 +360,6 @@ app.post('/api/auth/vk', async (req, res) => {
     }
 });
  
-// ===== ПОЛУЧЕНИЕ ДАННЫХ ПОЛЬЗОВАТЕЛЯ =====
 app.get('/api/auth/me', authMiddleware, (req, res) => {
     try {
         const db = readDB();
@@ -565,7 +547,6 @@ app.post('/api/users/:userId/stats', authMiddleware, (req, res) => {
     }
 });
  
-// ===== ТОП ИГРОКОВ =====
 app.get('/api/top-players', (req, res) => {
     try {
         const db = readDB();
@@ -587,7 +568,6 @@ app.get('/api/top-players', (req, res) => {
     }
 });
  
-// ===== СТАТИСТИКА САЙТА =====
 app.get('/api/stats', (req, res) => {
     try {
         const db = readDB();
@@ -611,10 +591,10 @@ initDB();
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📁 Database: ${DB_PATH}`);
+    console.log(`👑 Супер-админ: ${SUPER_ADMIN_EMAIL}`);
     console.log(`🔐 JWT_SECRET: ${process.env.JWT_SECRET ? '✅ Установлен' : '❌ НЕ УСТАНОВЛЕН (используется default)'}`);
 });
  
-// Обработка необработанных ошибок
 process.on('uncaughtException', (error) => {
     console.error('🔥 Необработанное исключение:', error);
 });
