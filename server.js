@@ -6,86 +6,74 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
- 
+
 const app = express();
 const PORT = process.env.PORT || 3000;
- 
-// ===== НАСТРОЙКИ =====
-app.use(cors({
-    origin: '*',
-    credentials: true
-}));
+
+app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
- 
-// ===== СУПЕР-АДМИН =====
+
 const SUPER_ADMIN_EMAIL = 'startup@mail.ru';
- 
-// ===== БАЗА ДАННЫХ =====
 const DB_PATH = path.join(__dirname, 'database', 'db.json');
- 
+
+// ===== ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ =====
 function initDB() {
     const dbDir = path.join(__dirname, 'database');
-    if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
-    }
+    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
     
-    let db;
     if (!fs.existsSync(DB_PATH)) {
-        db = {
+        const initialDB = {
             users: [],
             servers: [],
             admins: [SUPER_ADMIN_EMAIL],
             stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 },
-            pendingPlayers: [] // Новая очередь игроков
+            matches: [] // <-- НОВОЕ: хранилище матчей 5v5
         };
-        fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-        console.log('✅ База данных создана с супер-админом:', SUPER_ADMIN_EMAIL);
+        fs.writeFileSync(DB_PATH, JSON.stringify(initialDB, null, 2));
+        console.log('? База данных создана с супер-админом:', SUPER_ADMIN_EMAIL);
     } else {
-        db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-        if (!db.admins) db.admins = [];
-        if (!db.admins.includes(SUPER_ADMIN_EMAIL)) {
-            db.admins.push(SUPER_ADMIN_EMAIL);
-            fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-            console.log('✅ Супер-админ добавлен в существующую БД:', SUPER_ADMIN_EMAIL);
-        }
-        if (!db.pendingPlayers) {
-            db.pendingPlayers = [];
+        const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+        if (!db.matches) {
+            db.matches = [];
             fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
         }
     }
 }
- 
+
 function readDB() {
     try {
         const data = fs.readFileSync(DB_PATH, 'utf8');
-        return JSON.parse(data);
+        const db = JSON.parse(data);
+        if (!db.matches) db.matches = [];
+        return db;
     } catch (error) {
-        console.error('❌ Ошибка чтения БД:', error);
-        return { users: [], servers: [], admins: [SUPER_ADMIN_EMAIL], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 }, pendingPlayers: [] };
+        console.error('? Ошибка чтения БД:', error);
+        return { users: [], servers: [], admins: [SUPER_ADMIN_EMAIL], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 }, matches: [] };
     }
 }
- 
+
 function writeDB(data) {
     try {
+        if (!data.matches) data.matches = [];
         fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
         return true;
     } catch (error) {
-        console.error('❌ Ошибка записи БД:', error);
+        console.error('? Ошибка записи БД:', error);
         return false;
     }
 }
- 
+
 // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
 function findUserByEmail(email) {
     const db = readDB();
     return db.users.find(u => u.email === email);
 }
- 
+
 function findUserByUsername(username) {
     const db = readDB();
     return db.users.find(u => u.username === username);
 }
- 
+
 function generateToken(user) {
     return jwt.sign(
         { id: user.id, email: user.email, username: user.username },
@@ -93,76 +81,52 @@ function generateToken(user) {
         { expiresIn: '7d' }
     );
 }
- 
+
 function verifyToken(token) {
-    try {
-        return jwt.verify(token, process.env.JWT_SECRET || 'default_secret_key_change_me');
-    } catch (error) {
-        return null;
-    }
+    try { return jwt.verify(token, process.env.JWT_SECRET || 'default_secret_key_change_me'); } 
+    catch { return null; }
 }
- 
+
 function authMiddleware(req, res, next) {
     const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-        return res.status(401).json({ error: 'Требуется авторизация' });
-    }
+    if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
     const decoded = verifyToken(token);
-    if (!decoded) {
-        return res.status(401).json({ error: 'Неверный токен' });
-    }
+    if (!decoded) return res.status(401).json({ error: 'Неверный токен' });
     req.user = decoded;
     next();
 }
- 
+
 function adminMiddleware(req, res, next) {
     const db = readDB();
     const user = db.users.find(u => u.id === req.user.id);
-    if (!user) {
-        return res.status(403).json({ error: 'Пользователь не найден' });
-    }
-    if (!db.admins.includes(user.email) && user.email !== SUPER_ADMIN_EMAIL) {
+    if (!user) return res.status(403).json({ error: 'Пользователь не найден' });
+    if (!db.admins.includes(user.email) && user.email !== SUPER_ADMIN_EMAIL)
         return res.status(403).json({ error: 'Недостаточно прав' });
-    }
     if (user.email === SUPER_ADMIN_EMAIL && !db.admins.includes(user.email)) {
         db.admins.push(user.email);
         writeDB(db);
     }
     next();
 }
- 
+
 // ===== АУТЕНТИФИКАЦИЯ =====
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, email, standoffId, password } = req.body;
-        
-        if (!username || !email || !standoffId || !password) {
+        if (!username || !email || !standoffId || !password)
             return res.status(400).json({ error: 'Все поля обязательны' });
-        }
-        if (username.length < 3 || username.length > 20) {
+        if (username.length < 3 || username.length > 20)
             return res.status(400).json({ error: 'Имя от 3 до 20 символов' });
-        }
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({ error: 'Неверный email' });
-        }
-        if (!/^\d+$/.test(standoffId)) {
-            return res.status(400).json({ error: 'ID только цифры' });
-        }
-        if (password.length < 8) {
-            return res.status(400).json({ error: 'Пароль минимум 8 символов' });
-        }
+        if (!emailRegex.test(email)) return res.status(400).json({ error: 'Неверный email' });
+        if (!/^\d+$/.test(standoffId)) return res.status(400).json({ error: 'ID только цифры' });
+        if (password.length < 8) return res.status(400).json({ error: 'Пароль минимум 8 символов' });
         
         const db = readDB();
-        if (findUserByEmail(email)) {
-            return res.status(400).json({ error: 'Email уже используется' });
-        }
-        if (findUserByUsername(username)) {
-            return res.status(400).json({ error: 'Имя уже используется' });
-        }
-        if (db.users.find(u => u.standoffId === standoffId)) {
+        if (findUserByEmail(email)) return res.status(400).json({ error: 'Email уже используется' });
+        if (findUserByUsername(username)) return res.status(400).json({ error: 'Имя уже используется' });
+        if (db.users.find(u => u.standoffId === standoffId))
             return res.status(400).json({ error: 'ID Standoff 2 уже используется' });
-        }
         
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = {
@@ -175,16 +139,13 @@ app.post('/api/auth/register', async (req, res) => {
             matches: 0,
             kills: 0,
             deaths: 0,
-            serverMatches: 0, // Новая статистика
+            serverMatches: 0,
             kdHistory: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             registered: new Date().toISOString(),
             lastLogin: new Date().toISOString()
         };
-        
         db.users.push(newUser);
-        if (email === SUPER_ADMIN_EMAIL && !db.admins.includes(email)) {
-            db.admins.push(email);
-        }
+        if (email === SUPER_ADMIN_EMAIL && !db.admins.includes(email)) db.admins.push(email);
         writeDB(db);
         
         const token = generateToken(newUser);
@@ -204,36 +165,27 @@ app.post('/api/auth/register', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Registration error:', error);
+        console.error('? Registration error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
- 
+
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email и пароль обязательны' });
-        }
+        if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
         const user = findUserByEmail(email);
-        if (!user) {
+        if (!user) return res.status(401).json({ error: 'Неверный email или пароль' });
+        if (!await bcrypt.compare(password, user.password))
             return res.status(401).json({ error: 'Неверный email или пароль' });
-        }
-        const isValidPassword = await bcrypt.compare(password, user.password);
-        if (!isValidPassword) {
-            return res.status(401).json({ error: 'Неверный email или пароль' });
-        }
         
         const db = readDB();
         const userIndex = db.users.findIndex(u => u.id === user.id);
         if (userIndex !== -1) {
             db.users[userIndex].lastLogin = new Date().toISOString();
-            if (email === SUPER_ADMIN_EMAIL && !db.admins.includes(email)) {
-                db.admins.push(email);
-            }
+            if (email === SUPER_ADMIN_EMAIL && !db.admins.includes(email)) db.admins.push(email);
             writeDB(db);
         }
-        
         const token = generateToken(user);
         res.json({
             success: true,
@@ -251,28 +203,22 @@ app.post('/api/auth/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Login error:', error);
+        console.error('? Login error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
- 
+
 app.post('/api/auth/vk', async (req, res) => {
     try {
         const { vkId, vkName, vkAvatar } = req.body;
-        if (!vkId) {
-            return res.status(400).json({ error: 'ID VK обязателен' });
-        }
+        if (!vkId) return res.status(400).json({ error: 'ID VK обязателен' });
         const db = readDB();
         let user = db.users.find(u => u.vkId === vkId);
-        
         if (!user) {
             const username = vkName.replace(/\s/g, '_').toLowerCase();
             let finalUsername = username;
             let counter = 1;
-            while (findUserByUsername(finalUsername)) {
-                finalUsername = `${username}_${counter}`;
-                counter++;
-            }
+            while (findUserByUsername(finalUsername)) { finalUsername = `${username}_${counter}`; counter++; }
             const newUser = {
                 id: uuidv4(),
                 username: finalUsername,
@@ -294,12 +240,8 @@ app.post('/api/auth/vk', async (req, res) => {
             user = newUser;
         } else {
             const userIndex = db.users.findIndex(u => u.id === user.id);
-            if (userIndex !== -1) {
-                db.users[userIndex].lastLogin = new Date().toISOString();
-                writeDB(db);
-            }
+            if (userIndex !== -1) { db.users[userIndex].lastLogin = new Date().toISOString(); writeDB(db); }
         }
-        
         const token = generateToken(user);
         res.json({
             success: true,
@@ -319,18 +261,16 @@ app.post('/api/auth/vk', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ VK auth error:', error);
+        console.error('? VK auth error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
- 
+
 app.get('/api/auth/me', authMiddleware, (req, res) => {
     try {
         const db = readDB();
         const user = db.users.find(u => u.id === req.user.id);
-        if (!user) {
-            return res.status(404).json({ error: 'Пользователь не найден' });
-        }
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
         res.json({
             id: user.id,
             username: user.username,
@@ -347,133 +287,27 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
             lastLogin: user.lastLogin
         });
     } catch (error) {
-        console.error('❌ Get user error:', error);
+        console.error('? Get user error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
- 
-// ===== НОВЫЙ ЭНДПОИНТ: ПОЛУЧИТЬ ИГРОКОВ В ОЧЕРЕДИ =====
-app.get('/api/pending-players', authMiddleware, adminMiddleware, (req, res) => {
-    try {
-        const db = readDB();
-        res.json(db.pendingPlayers || []);
-    } catch (error) {
-        console.error('❌ Get pending players error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
- 
-// ===== НОВЫЙ ЭНДПОИНТ: ДОБАВИТЬ ИГРОКА В ОЧЕРЕДЬ =====
-app.post('/api/pending-players', authMiddleware, (req, res) => {
-    try {
-        const { username } = req.body;
-        if (!username) {
-            return res.status(400).json({ error: 'Имя пользователя обязательно' });
-        }
-        
-        const db = readDB();
-        const user = db.users.find(u => u.username === username);
-        if (!user) {
-            return res.status(404).json({ error: 'Пользователь не найден' });
-        }
-        
-        // Проверяем, не в очереди ли уже
-        if (db.pendingPlayers.some(p => p.username === username)) {
-            return res.status(400).json({ error: 'Игрок уже в очереди' });
-        }
-        
-        db.pendingPlayers.push({
-            username: username,
-            addedAt: new Date().toISOString()
-        });
-        writeDB(db);
-        
-        res.json({ success: true, pendingPlayers: db.pendingPlayers });
-    } catch (error) {
-        console.error('❌ Add pending player error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
- 
-// ===== НОВЫЙ ЭНДПОИНТ: ЗАЧИСЛИТЬ ИГРОКА (увеличить serverMatches) =====
-app.post('/api/pending-players/:username/credit', authMiddleware, adminMiddleware, (req, res) => {
-    try {
-        const username = req.params.username;
-        const db = readDB();
-        
-        // Находим игрока в очереди
-        const pendingIndex = db.pendingPlayers.findIndex(p => p.username === username);
-        if (pendingIndex === -1) {
-            return res.status(404).json({ error: 'Игрок не найден в очереди' });
-        }
-        
-        // Находим пользователя в базе
-        const user = db.users.find(u => u.username === username);
-        if (!user) {
-            return res.status(404).json({ error: 'Пользователь не найден' });
-        }
-        
-        // Увеличиваем serverMatches
-        user.serverMatches = (user.serverMatches || 0) + 1;
-        
-        // Удаляем из очереди
-        db.pendingPlayers.splice(pendingIndex, 1);
-        writeDB(db);
-        
-        res.json({ 
-            success: true, 
-            message: `Игроку ${username} зачислена игра`,
-            serverMatches: user.serverMatches,
-            pendingPlayers: db.pendingPlayers
-        });
-    } catch (error) {
-        console.error('❌ Credit player error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
- 
-// ===== НОВЫЙ ЭНДПОИНТ: ОТМЕНИТЬ ИГРОКА (удалить из очереди) =====
-app.delete('/api/pending-players/:username', authMiddleware, adminMiddleware, (req, res) => {
-    try {
-        const username = req.params.username;
-        const db = readDB();
-        
-        const pendingIndex = db.pendingPlayers.findIndex(p => p.username === username);
-        if (pendingIndex === -1) {
-            return res.status(404).json({ error: 'Игрок не найден в очереди' });
-        }
-        
-        db.pendingPlayers.splice(pendingIndex, 1);
-        writeDB(db);
-        
-        res.json({ 
-            success: true, 
-            message: `Игрок ${username} удалён из очереди`,
-            pendingPlayers: db.pendingPlayers
-        });
-    } catch (error) {
-        console.error('❌ Cancel player error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
- 
+
 // ===== СЕРВЕРА =====
 app.get('/api/servers', (req, res) => {
     try {
         const db = readDB();
         res.json(db.servers);
     } catch (error) {
-        console.error('❌ Get servers error:', error);
+        console.error('? Get servers error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
- 
+
 app.post('/api/servers', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const { name, lobby, playerId, map } = req.body;
-        if (!name || !lobby || !playerId || !map) {
+        if (!name || !lobby || !playerId || !map)
             return res.status(400).json({ error: 'Все поля обязательны' });
-        }
         const db = readDB();
         const newServer = {
             id: Date.now(),
@@ -482,6 +316,7 @@ app.post('/api/servers', authMiddleware, adminMiddleware, (req, res) => {
             playerId,
             map,
             status: 'online',
+            pending: [],
             createdAt: new Date().toISOString(),
             createdBy: req.user.id
         };
@@ -489,11 +324,11 @@ app.post('/api/servers', authMiddleware, adminMiddleware, (req, res) => {
         writeDB(db);
         res.json({ success: true, server: newServer });
     } catch (error) {
-        console.error('❌ Create server error:', error);
+        console.error('? Create server error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
- 
+
 app.delete('/api/servers/:id', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const serverId = parseInt(req.params.id);
@@ -502,45 +337,31 @@ app.delete('/api/servers/:id', authMiddleware, adminMiddleware, (req, res) => {
         writeDB(db);
         res.json({ success: true });
     } catch (error) {
-        console.error('❌ Delete server error:', error);
+        console.error('? Delete server error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
- 
+
 // ===== АДМИНЫ =====
 app.get('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
-    try {
-        const db = readDB();
-        res.json(db.admins);
-    } catch (error) {
-        console.error('❌ Get admins error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
+    try { const db = readDB(); res.json(db.admins); } 
+    catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
- 
+
 app.post('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const { email } = req.body;
-        if (!email) {
-            return res.status(400).json({ error: 'Email обязателен' });
-        }
+        if (!email) return res.status(400).json({ error: 'Email обязателен' });
         const db = readDB();
         const user = db.users.find(u => u.email === email);
-        if (!user) {
-            return res.status(404).json({ error: 'Пользователь не найден' });
-        }
-        if (db.admins.includes(email)) {
-            return res.status(400).json({ error: 'Уже администратор' });
-        }
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+        if (db.admins.includes(email)) return res.status(400).json({ error: 'Уже администратор' });
         db.admins.push(email);
         writeDB(db);
         res.json({ success: true, admins: db.admins });
-    } catch (error) {
-        console.error('❌ Add admin error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
- 
+
 app.delete('/api/admins/:email', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const email = decodeURIComponent(req.params.email);
@@ -548,34 +369,144 @@ app.delete('/api/admins/:email', authMiddleware, adminMiddleware, (req, res) => 
         db.admins = db.admins.filter(e => e !== email);
         writeDB(db);
         res.json({ success: true, admins: db.admins });
+    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
+});
+
+// ====================================================
+// ===== НОВЫЙ РАЗДЕЛ: МАТЧИ 5v5 =====
+// ====================================================
+
+// Получить все матчи
+app.get('/api/matches', authMiddleware, (req, res) => {
+    try {
+        const db = readDB();
+        res.json(db.matches || []);
     } catch (error) {
-        console.error('❌ Remove admin error:', error);
+        console.error('? Get matches error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
- 
+
+// Получить конкретный матч по ID
+app.get('/api/matches/:id', authMiddleware, (req, res) => {
+    try {
+        const db = readDB();
+        const match = db.matches.find(m => m.id === req.params.id);
+        if (!match) return res.status(404).json({ error: 'Матч не найден' });
+        res.json(match);
+    } catch (error) {
+        console.error('? Get match error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Создать новый матч
+app.post('/api/matches', authMiddleware, (req, res) => {
+    try {
+        const { players } = req.body;
+        if (!players || players.length < 10) {
+            return res.status(400).json({ error: 'Нужно минимум 10 игроков' });
+        }
+
+        const db = readDB();
+        const matchId = 'match_' + Date.now();
+        
+        // Перемешиваем игроков
+        const shuffled = [...players].sort(() => Math.random() - 0.5);
+        const half = Math.ceil(shuffled.length / 2);
+        const terrorist = shuffled.slice(0, half).map(p => ({ username: p, captain: false }));
+        const counter = shuffled.slice(half).map(p => ({ username: p, captain: false }));
+        
+        // Назначаем капитанов
+        if (terrorist.length > 0) terrorist[0].captain = true;
+        if (counter.length > 0) counter[0].captain = true;
+
+        const newMatch = {
+            id: matchId,
+            terrorist: terrorist,
+            counter: counter,
+            bans: [],
+            selectedMap: null,
+            link: null,
+            resultImage: null,
+            status: 'ban_phase',
+            currentBanTurn: 'terrorist',
+            createdAt: new Date().toISOString(),
+            createdBy: req.user.id
+        };
+
+        db.matches.push(newMatch);
+        writeDB(db);
+        
+        res.json({ success: true, match: newMatch });
+    } catch (error) {
+        console.error('? Create match error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Обновить матч (баны, статус, ссылка, результат)
+app.put('/api/matches/:id', authMiddleware, (req, res) => {
+    try {
+        const matchId = req.params.id;
+        const updates = req.body;
+        const db = readDB();
+        
+        const matchIndex = db.matches.findIndex(m => m.id === matchId);
+        if (matchIndex === -1) return res.status(404).json({ error: 'Матч не найден' });
+        
+        // Обновляем только разрешённые поля
+        const match = db.matches[matchIndex];
+        if (updates.bans) match.bans = updates.bans;
+        if (updates.selectedMap) match.selectedMap = updates.selectedMap;
+        if (updates.link !== undefined) match.link = updates.link;
+        if (updates.resultImage !== undefined) match.resultImage = updates.resultImage;
+        if (updates.status) match.status = updates.status;
+        if (updates.currentBanTurn) match.currentBanTurn = updates.currentBanTurn;
+        
+        db.matches[matchIndex] = match;
+        writeDB(db);
+        
+        res.json({ success: true, match: match });
+    } catch (error) {
+        console.error('? Update match error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Удалить матч
+app.delete('/api/matches/:id', authMiddleware, (req, res) => {
+    try {
+        const matchId = req.params.id;
+        const db = readDB();
+        db.matches = db.matches.filter(m => m.id !== matchId);
+        writeDB(db);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('? Delete match error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ====================================================
 // ===== СТАТИСТИКА =====
+// ====================================================
+
 app.post('/api/users/:userId/stats', authMiddleware, (req, res) => {
     try {
         const userId = req.params.userId;
         const { kills, deaths } = req.body;
-        if (userId !== req.user.id) {
-            return res.status(403).json({ error: 'Недостаточно прав' });
-        }
+        if (userId !== req.user.id) return res.status(403).json({ error: 'Недостаточно прав' });
         const db = readDB();
         const userIndex = db.users.findIndex(u => u.id === userId);
-        if (userIndex === -1) {
-            return res.status(404).json({ error: 'Пользователь не найден' });
-        }
+        if (userIndex === -1) return res.status(404).json({ error: 'Пользователь не найден' });
         const user = db.users[userIndex];
         user.kills += kills || 0;
         user.deaths += deaths || 0;
         user.matches += 1;
         const kd = user.deaths > 0 ? (user.kills / user.deaths) : user.kills;
         user.kdHistory.push(parseFloat(kd.toFixed(2)));
-        if (user.kdHistory.length > 10) {
-            user.kdHistory.shift();
-        }
+        if (user.kdHistory.length > 10) user.kdHistory.shift();
         writeDB(db);
         res.json({
             success: true,
@@ -589,65 +520,51 @@ app.post('/api/users/:userId/stats', authMiddleware, (req, res) => {
                 kdHistory: user.kdHistory
             }
         });
-    } catch (error) {
-        console.error('❌ Update stats error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
- 
-// ===== ТОП ИГРОКОВ (по количеству игр на сервере) =====
+
 app.get('/api/top-players', (req, res) => {
     try {
         const db = readDB();
-        const topPlayers = db.users
-            .map(user => ({
-                username: user.username,
-                standoffId: user.standoffId,
-                kills: user.kills,
-                matches: user.matches,
-                serverMatches: user.serverMatches || 0,
-                kd: user.deaths > 0 ? (user.kills / user.deaths).toFixed(2) : user.kills.toFixed(2)
-            }))
-            .sort((a, b) => b.serverMatches - a.serverMatches)
-            .slice(0, 10);
+        const topPlayers = db.users.map(user => ({
+            username: user.username,
+            standoffId: user.standoffId,
+            kills: user.kills,
+            matches: user.matches,
+            serverMatches: user.serverMatches || 0,
+            kd: user.deaths > 0 ? (user.kills / user.deaths).toFixed(2) : user.kills.toFixed(2)
+        })).sort((a, b) => b.serverMatches - a.serverMatches).slice(0, 10);
         res.json(topPlayers);
-    } catch (error) {
-        console.error('❌ Get top players error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
- 
+
 app.get('/api/stats', (req, res) => {
     try {
         const db = readDB();
-        const onlineCount = Math.floor(Math.random() * 150) + 50;
         res.json({
-            online: onlineCount,
+            online: Math.floor(Math.random() * 150) + 50,
             tournaments: db.stats.totalTournaments || 0,
             servers: db.servers.length,
             totalUsers: db.users.length,
-            pendingCount: db.pendingPlayers ? db.pendingPlayers.length : 0
+            matches: db.matches ? db.matches.length : 0
         });
-    } catch (error) {
-        console.error('❌ Get stats error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
- 
+
 // ===== ЗАПУСК =====
 initDB();
- 
+
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📁 Database: ${DB_PATH}`);
-    console.log(`👑 Супер-админ: ${SUPER_ADMIN_EMAIL}`);
-    console.log(`🔐 JWT_SECRET: ${process.env.JWT_SECRET ? '✅ Установлен' : '❌ НЕ УСТАНОВЛЕН (используется default)'}`);
+    console.log(`?? Server running on port ${PORT}`);
+    console.log(`?? Database: ${DB_PATH}`);
+    console.log(`?? Супер-админ: ${SUPER_ADMIN_EMAIL}`);
+    console.log(`?? JWT_SECRET: ${process.env.JWT_SECRET ? '? Установлен' : '? НЕ УСТАНОВЛЕН (используется default)'}`);
 });
- 
+
 process.on('uncaughtException', (error) => {
-    console.error('🔥 Необработанное исключение:', error);
+    console.error('?? Необработанное исключение:', error);
 });
- 
+
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('🔥 Необработанный rejection:', reason);
+    console.error('?? Необработанный rejection:', reason);
 });
