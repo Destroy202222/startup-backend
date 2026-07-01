@@ -27,16 +27,18 @@ function initDB() {
             servers: [],
             admins: [SUPER_ADMIN_EMAIL],
             stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 },
-            matches: [] // <-- НОВОЕ: хранилище матчей 5v5
+            matches: [],
+            searchPlayers: [],
+            pendingQueues: {} // { serverId: [username, ...] }
         };
         fs.writeFileSync(DB_PATH, JSON.stringify(initialDB, null, 2));
-        console.log('? База данных создана с супер-админом:', SUPER_ADMIN_EMAIL);
+        console.log('? База данных создана');
     } else {
         const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-        if (!db.matches) {
-            db.matches = [];
-            fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-        }
+        if (!db.searchPlayers) db.searchPlayers = [];
+        if (!db.matches) db.matches = [];
+        if (!db.pendingQueues) db.pendingQueues = {};
+        fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
     }
 }
 
@@ -44,17 +46,22 @@ function readDB() {
     try {
         const data = fs.readFileSync(DB_PATH, 'utf8');
         const db = JSON.parse(data);
+        if (!db.searchPlayers) db.searchPlayers = [];
         if (!db.matches) db.matches = [];
+        if (!db.pendingQueues) db.pendingQueues = {};
+        if (!db.admins) db.admins = [SUPER_ADMIN_EMAIL];
         return db;
     } catch (error) {
         console.error('? Ошибка чтения БД:', error);
-        return { users: [], servers: [], admins: [SUPER_ADMIN_EMAIL], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 }, matches: [] };
+        return { users: [], servers: [], admins: [SUPER_ADMIN_EMAIL], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 }, matches: [], searchPlayers: [], pendingQueues: {} };
     }
 }
 
 function writeDB(data) {
     try {
+        if (!data.searchPlayers) data.searchPlayers = [];
         if (!data.matches) data.matches = [];
+        if (!data.pendingQueues) data.pendingQueues = {};
         fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
         return true;
     } catch (error) {
@@ -109,7 +116,10 @@ function adminMiddleware(req, res, next) {
     next();
 }
 
+// ====================================================
 // ===== АУТЕНТИФИКАЦИЯ =====
+// ====================================================
+
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, email, standoffId, password } = req.body;
@@ -292,7 +302,10 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
     }
 });
 
+// ====================================================
 // ===== СЕРВЕРА =====
+// ====================================================
+
 app.get('/api/servers', (req, res) => {
     try {
         const db = readDB();
@@ -316,7 +329,6 @@ app.post('/api/servers', authMiddleware, adminMiddleware, (req, res) => {
             playerId,
             map,
             status: 'online',
-            pending: [],
             createdAt: new Date().toISOString(),
             createdBy: req.user.id
         };
@@ -333,6 +345,11 @@ app.delete('/api/servers/:id', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const serverId = parseInt(req.params.id);
         const db = readDB();
+        const server = db.servers.find(s => s.id === serverId);
+        if (server) {
+            // Удаляем очередь для этого сервера
+            delete db.pendingQueues[serverId];
+        }
         db.servers = db.servers.filter(s => s.id !== serverId);
         writeDB(db);
         res.json({ success: true });
@@ -342,7 +359,99 @@ app.delete('/api/servers/:id', authMiddleware, adminMiddleware, (req, res) => {
     }
 });
 
+// ====================================================
+// ===== ОЧЕРЕДИ ДЛЯ DM СЕРВЕРОВ =====
+// ====================================================
+
+// Получить очередь для сервера
+app.get('/api/servers/:serverId/pending', authMiddleware, (req, res) => {
+    try {
+        const serverId = parseInt(req.params.serverId);
+        const db = readDB();
+        const queue = db.pendingQueues[serverId] || [];
+        res.json(queue);
+    } catch (error) {
+        console.error('? Get pending error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Добавить игрока в очередь сервера
+app.post('/api/servers/:serverId/pending', authMiddleware, (req, res) => {
+    try {
+        const serverId = parseInt(req.params.serverId);
+        const { username } = req.body;
+        if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
+        
+        const db = readDB();
+        const server = db.servers.find(s => s.id === serverId);
+        if (!server) return res.status(404).json({ error: 'Сервер не найден' });
+        
+        if (!db.pendingQueues[serverId]) db.pendingQueues[serverId] = [];
+        if (db.pendingQueues[serverId].includes(username)) {
+            return res.status(400).json({ error: 'Игрок уже в очереди' });
+        }
+        
+        db.pendingQueues[serverId].push(username);
+        writeDB(db);
+        res.json({ success: true, queue: db.pendingQueues[serverId] });
+    } catch (error) {
+        console.error('? Add pending error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Удалить игрока из очереди сервера
+app.delete('/api/servers/:serverId/pending/:username', authMiddleware, adminMiddleware, (req, res) => {
+    try {
+        const serverId = parseInt(req.params.serverId);
+        const username = req.params.username;
+        const db = readDB();
+        
+        if (!db.pendingQueues[serverId]) db.pendingQueues[serverId] = [];
+        db.pendingQueues[serverId] = db.pendingQueues[serverId].filter(p => p !== username);
+        writeDB(db);
+        res.json({ success: true, queue: db.pendingQueues[serverId] });
+    } catch (error) {
+        console.error('? Remove pending error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Зачислить игрока (увеличить serverMatches)
+app.post('/api/servers/:serverId/credit/:username', authMiddleware, adminMiddleware, (req, res) => {
+    try {
+        const serverId = parseInt(req.params.serverId);
+        const username = req.params.username;
+        const db = readDB();
+        
+        // Удаляем из очереди
+        if (db.pendingQueues[serverId]) {
+            db.pendingQueues[serverId] = db.pendingQueues[serverId].filter(p => p !== username);
+        }
+        
+        // Находим пользователя и увеличиваем serverMatches
+        const user = db.users.find(u => u.username === username);
+        if (user) {
+            user.serverMatches = (user.serverMatches || 0) + 1;
+        }
+        
+        writeDB(db);
+        res.json({ 
+            success: true, 
+            message: `Игрок ${username} зачислен`,
+            queue: db.pendingQueues[serverId] || []
+        });
+    } catch (error) {
+        console.error('? Credit player error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ====================================================
 // ===== АДМИНЫ =====
+// ====================================================
+
 app.get('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
     try { const db = readDB(); res.json(db.admins); } 
     catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
@@ -365,6 +474,9 @@ app.post('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
 app.delete('/api/admins/:email', authMiddleware, adminMiddleware, (req, res) => {
     try {
         const email = decodeURIComponent(req.params.email);
+        if (email === SUPER_ADMIN_EMAIL) {
+            return res.status(400).json({ error: 'Нельзя удалить главного администратора' });
+        }
         const db = readDB();
         db.admins = db.admins.filter(e => e !== email);
         writeDB(db);
@@ -373,10 +485,56 @@ app.delete('/api/admins/:email', authMiddleware, adminMiddleware, (req, res) => 
 });
 
 // ====================================================
-// ===== НОВЫЙ РАЗДЕЛ: МАТЧИ 5v5 =====
+// ===== ПОИСК 5v5 =====
 // ====================================================
 
-// Получить все матчи
+app.get('/api/search-players', authMiddleware, (req, res) => {
+    try {
+        const db = readDB();
+        res.json(db.searchPlayers || []);
+    } catch (error) {
+        console.error('? Get search players error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/search-players', authMiddleware, (req, res) => {
+    try {
+        const { username } = req.body;
+        if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
+        const db = readDB();
+        if (!db.searchPlayers) db.searchPlayers = [];
+        if (db.searchPlayers.includes(username)) {
+            return res.status(400).json({ error: 'Уже в поиске' });
+        }
+        db.searchPlayers.push(username);
+        writeDB(db);
+        res.json({ success: true, players: db.searchPlayers });
+    } catch (error) {
+        console.error('? Add search player error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.delete('/api/search-players', authMiddleware, (req, res) => {
+    try {
+        const { username } = req.body;
+        if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
+        const db = readDB();
+        if (!db.searchPlayers) db.searchPlayers = [];
+        db.searchPlayers = db.searchPlayers.filter(p => p !== username);
+        writeDB(db);
+        res.json({ success: true, players: db.searchPlayers });
+    } catch (error) {
+        console.error('? Remove search player error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ====================================================
+// ===== МАТЧИ 5v5 =====
+// ====================================================
+
 app.get('/api/matches', authMiddleware, (req, res) => {
     try {
         const db = readDB();
@@ -387,7 +545,6 @@ app.get('/api/matches', authMiddleware, (req, res) => {
     }
 });
 
-// Получить конкретный матч по ID
 app.get('/api/matches/:id', authMiddleware, (req, res) => {
     try {
         const db = readDB();
@@ -400,7 +557,6 @@ app.get('/api/matches/:id', authMiddleware, (req, res) => {
     }
 });
 
-// Создать новый матч
 app.post('/api/matches', authMiddleware, (req, res) => {
     try {
         const { players } = req.body;
@@ -411,13 +567,11 @@ app.post('/api/matches', authMiddleware, (req, res) => {
         const db = readDB();
         const matchId = 'match_' + Date.now();
         
-        // Перемешиваем игроков
         const shuffled = [...players].sort(() => Math.random() - 0.5);
         const half = Math.ceil(shuffled.length / 2);
         const terrorist = shuffled.slice(0, half).map(p => ({ username: p, captain: false }));
         const counter = shuffled.slice(half).map(p => ({ username: p, captain: false }));
         
-        // Назначаем капитанов
         if (terrorist.length > 0) terrorist[0].captain = true;
         if (counter.length > 0) counter[0].captain = true;
 
@@ -445,7 +599,6 @@ app.post('/api/matches', authMiddleware, (req, res) => {
     }
 });
 
-// Обновить матч (баны, статус, ссылка, результат)
 app.put('/api/matches/:id', authMiddleware, (req, res) => {
     try {
         const matchId = req.params.id;
@@ -455,18 +608,16 @@ app.put('/api/matches/:id', authMiddleware, (req, res) => {
         const matchIndex = db.matches.findIndex(m => m.id === matchId);
         if (matchIndex === -1) return res.status(404).json({ error: 'Матч не найден' });
         
-        // Обновляем только разрешённые поля
         const match = db.matches[matchIndex];
-        if (updates.bans) match.bans = updates.bans;
-        if (updates.selectedMap) match.selectedMap = updates.selectedMap;
+        if (updates.bans !== undefined) match.bans = updates.bans;
+        if (updates.selectedMap !== undefined) match.selectedMap = updates.selectedMap;
         if (updates.link !== undefined) match.link = updates.link;
         if (updates.resultImage !== undefined) match.resultImage = updates.resultImage;
-        if (updates.status) match.status = updates.status;
-        if (updates.currentBanTurn) match.currentBanTurn = updates.currentBanTurn;
+        if (updates.status !== undefined) match.status = updates.status;
+        if (updates.currentBanTurn !== undefined) match.currentBanTurn = updates.currentBanTurn;
         
         db.matches[matchIndex] = match;
         writeDB(db);
-        
         res.json({ success: true, match: match });
     } catch (error) {
         console.error('? Update match error:', error);
@@ -474,7 +625,6 @@ app.put('/api/matches/:id', authMiddleware, (req, res) => {
     }
 });
 
-// Удалить матч
 app.delete('/api/matches/:id', authMiddleware, (req, res) => {
     try {
         const matchId = req.params.id;
@@ -541,17 +691,23 @@ app.get('/api/top-players', (req, res) => {
 app.get('/api/stats', (req, res) => {
     try {
         const db = readDB();
+        const totalPending = Object.values(db.pendingQueues || {}).reduce((acc, arr) => acc + arr.length, 0);
         res.json({
             online: Math.floor(Math.random() * 150) + 50,
             tournaments: db.stats.totalTournaments || 0,
             servers: db.servers.length,
             totalUsers: db.users.length,
-            matches: db.matches ? db.matches.length : 0
+            matches: db.matches ? db.matches.length : 0,
+            pendingCount: totalPending,
+            searchCount: db.searchPlayers ? db.searchPlayers.length : 0
         });
     } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
+// ====================================================
 // ===== ЗАПУСК =====
+// ====================================================
+
 initDB();
 
 app.listen(PORT, '0.0.0.0', () => {
