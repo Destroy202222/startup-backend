@@ -1,10 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
@@ -13,84 +12,24 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 
+// ===== ПОДКЛЮЧЕНИЕ К SUPABASE =====
+const SUPABASE_URL = 'https://juxdegzpajulauxecyml.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_diBYI198jT9-OvGLj6-6-w_I9xTMx9_';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const SUPER_ADMIN_EMAIL = 'startup@mail.ru';
-const DB_PATH = path.join(__dirname, 'database', 'db.json');
-
-// ===== ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ =====
-function initDB() {
-    const dbDir = path.join(__dirname, 'database');
-    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-    
-    if (!fs.existsSync(DB_PATH)) {
-        const initialDB = {
-            users: [],
-            servers: [],
-            admins: [SUPER_ADMIN_EMAIL],
-            stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 },
-            matches: [],
-            searchPlayers: [],
-            pendingQueues: {} // { serverId: [username, ...] }
-        };
-        fs.writeFileSync(DB_PATH, JSON.stringify(initialDB, null, 2));
-        console.log('? База данных создана');
-    } else {
-        const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-        if (!db.searchPlayers) db.searchPlayers = [];
-        if (!db.matches) db.matches = [];
-        if (!db.pendingQueues) db.pendingQueues = {};
-        fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-    }
-}
-
-function readDB() {
-    try {
-        const data = fs.readFileSync(DB_PATH, 'utf8');
-        const db = JSON.parse(data);
-        if (!db.searchPlayers) db.searchPlayers = [];
-        if (!db.matches) db.matches = [];
-        if (!db.pendingQueues) db.pendingQueues = {};
-        if (!db.admins) db.admins = [SUPER_ADMIN_EMAIL];
-        return db;
-    } catch (error) {
-        console.error('? Ошибка чтения БД:', error);
-        return { users: [], servers: [], admins: [SUPER_ADMIN_EMAIL], stats: { totalMatches: 0, totalTournaments: 0, onlineCount: 0 }, matches: [], searchPlayers: [], pendingQueues: {} };
-    }
-}
-
-function writeDB(data) {
-    try {
-        if (!data.searchPlayers) data.searchPlayers = [];
-        if (!data.matches) data.matches = [];
-        if (!data.pendingQueues) data.pendingQueues = {};
-        fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-        return true;
-    } catch (error) {
-        console.error('? Ошибка записи БД:', error);
-        return false;
-    }
-}
 
 // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
-function findUserByEmail(email) {
-    const db = readDB();
-    return db.users.find(u => u.email === email);
-}
-
-function findUserByUsername(username) {
-    const db = readDB();
-    return db.users.find(u => u.username === username);
-}
-
 function generateToken(user) {
     return jwt.sign(
         { id: user.id, email: user.email, username: user.username },
-        process.env.JWT_SECRET || 'default_secret_key_change_me',
+        process.env.JWT_SECRET || 'default_secret_key',
         { expiresIn: '7d' }
     );
 }
 
 function verifyToken(token) {
-    try { return jwt.verify(token, process.env.JWT_SECRET || 'default_secret_key_change_me'); } 
+    try { return jwt.verify(token, process.env.JWT_SECRET || 'default_secret_key'); } 
     catch { return null; }
 }
 
@@ -103,17 +42,21 @@ function authMiddleware(req, res, next) {
     next();
 }
 
-function adminMiddleware(req, res, next) {
-    const db = readDB();
-    const user = db.users.find(u => u.id === req.user.id);
-    if (!user) return res.status(403).json({ error: 'Пользователь не найден' });
-    if (!db.admins.includes(user.email) && user.email !== SUPER_ADMIN_EMAIL)
-        return res.status(403).json({ error: 'Недостаточно прав' });
-    if (user.email === SUPER_ADMIN_EMAIL && !db.admins.includes(user.email)) {
-        db.admins.push(user.email);
-        writeDB(db);
-    }
-    next();
+async function isAdmin(email) {
+    const { data, error } = await supabase
+        .from('admins')
+        .select('email')
+        .eq('email', email)
+        .single();
+    return !error && data !== null;
+}
+
+async function adminMiddleware(req, res, next) {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: 'Пользователь не найден' });
+    if (user.email === SUPER_ADMIN_EMAIL) return next();
+    if (await isAdmin(user.email)) return next();
+    return res.status(403).json({ error: 'Недостаточно прав' });
 }
 
 // ====================================================
@@ -123,21 +66,36 @@ function adminMiddleware(req, res, next) {
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, email, standoffId, password } = req.body;
-        if (!username || !email || !standoffId || !password)
+        
+        if (!username || !email || !standoffId || !password) {
             return res.status(400).json({ error: 'Все поля обязательны' });
-        if (username.length < 3 || username.length > 20)
+        }
+        if (username.length < 3 || username.length > 20) {
             return res.status(400).json({ error: 'Имя от 3 до 20 символов' });
+        }
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) return res.status(400).json({ error: 'Неверный email' });
-        if (!/^\d+$/.test(standoffId)) return res.status(400).json({ error: 'ID только цифры' });
-        if (password.length < 8) return res.status(400).json({ error: 'Пароль минимум 8 символов' });
-        
-        const db = readDB();
-        if (findUserByEmail(email)) return res.status(400).json({ error: 'Email уже используется' });
-        if (findUserByUsername(username)) return res.status(400).json({ error: 'Имя уже используется' });
-        if (db.users.find(u => u.standoffId === standoffId))
-            return res.status(400).json({ error: 'ID Standoff 2 уже используется' });
-        
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ error: 'Неверный email' });
+        }
+        if (!/^\d+$/.test(standoffId)) {
+            return res.status(400).json({ error: 'ID только цифры' });
+        }
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Пароль минимум 8 символов' });
+        }
+
+        const { data: existing, error: checkError } = await supabase
+            .from('users')
+            .select('email, username, standoffId')
+            .or(`email.eq.${email},username.eq.${username},standoffId.eq.${standoffId}`);
+
+        if (existing && existing.length > 0) {
+            const u = existing[0];
+            if (u.email === email) return res.status(400).json({ error: 'Email уже используется' });
+            if (u.username === username) return res.status(400).json({ error: 'Имя уже используется' });
+            if (u.standoffId === standoffId) return res.status(400).json({ error: 'ID уже используется' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = {
             id: uuidv4(),
@@ -145,7 +103,6 @@ app.post('/api/auth/register', async (req, res) => {
             email,
             standoffId,
             password: hashedPassword,
-            vkId: null,
             matches: 0,
             kills: 0,
             deaths: 0,
@@ -154,28 +111,37 @@ app.post('/api/auth/register', async (req, res) => {
             registered: new Date().toISOString(),
             lastLogin: new Date().toISOString()
         };
-        db.users.push(newUser);
-        if (email === SUPER_ADMIN_EMAIL && !db.admins.includes(email)) db.admins.push(email);
-        writeDB(db);
-        
-        const token = generateToken(newUser);
+
+        const { data, error } = await supabase
+            .from('users')
+            .insert([newUser])
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        if (email === SUPER_ADMIN_EMAIL) {
+            await supabase.from('admins').upsert([{ email }], { onConflict: 'email' });
+        }
+
+        const token = generateToken(data);
         res.json({
             success: true,
             token,
             user: {
-                id: newUser.id,
-                username: newUser.username,
-                email: newUser.email,
-                standoffId: newUser.standoffId,
-                matches: newUser.matches,
-                serverMatches: newUser.serverMatches,
-                kills: newUser.kills,
-                deaths: newUser.deaths,
-                kdHistory: newUser.kdHistory
+                id: data.id,
+                username: data.username,
+                email: data.email,
+                standoffId: data.standoffId,
+                matches: data.matches,
+                serverMatches: data.serverMatches || 0,
+                kills: data.kills,
+                deaths: data.deaths,
+                kdHistory: data.kdHistory
             }
         });
     } catch (error) {
-        console.error('? Registration error:', error);
+        console.error('Registration error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -183,19 +149,30 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
-        const user = findUserByEmail(email);
-        if (!user) return res.status(401).json({ error: 'Неверный email или пароль' });
-        if (!await bcrypt.compare(password, user.password))
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email и пароль обязательны' });
+        }
+
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .single();
+
+        if (error || !user) {
             return res.status(401).json({ error: 'Неверный email или пароль' });
-        
-        const db = readDB();
-        const userIndex = db.users.findIndex(u => u.id === user.id);
-        if (userIndex !== -1) {
-            db.users[userIndex].lastLogin = new Date().toISOString();
-            if (email === SUPER_ADMIN_EMAIL && !db.admins.includes(email)) db.admins.push(email);
-            writeDB(db);
         }
+
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ error: 'Неверный email или пароль' });
+        }
+
+        await supabase
+            .from('users')
+            .update({ lastLogin: new Date().toISOString() })
+            .eq('id', user.id);
+
         const token = generateToken(user);
         res.json({
             success: true,
@@ -213,81 +190,28 @@ app.post('/api/auth/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('? Login error:', error);
+        console.error('Login error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
-app.post('/api/auth/vk', async (req, res) => {
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
     try {
-        const { vkId, vkName, vkAvatar } = req.body;
-        if (!vkId) return res.status(400).json({ error: 'ID VK обязателен' });
-        const db = readDB();
-        let user = db.users.find(u => u.vkId === vkId);
-        if (!user) {
-            const username = vkName.replace(/\s/g, '_').toLowerCase();
-            let finalUsername = username;
-            let counter = 1;
-            while (findUserByUsername(finalUsername)) { finalUsername = `${username}_${counter}`; counter++; }
-            const newUser = {
-                id: uuidv4(),
-                username: finalUsername,
-                email: `${vkId}@vk.com`,
-                standoffId: vkId.toString().slice(0, 9),
-                password: await bcrypt.hash(`vk_${vkId}`, 10),
-                vkId: vkId.toString(),
-                vkAvatar: vkAvatar || '',
-                matches: 0,
-                serverMatches: 0,
-                kills: 0,
-                deaths: 0,
-                kdHistory: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                registered: new Date().toISOString(),
-                lastLogin: new Date().toISOString()
-            };
-            db.users.push(newUser);
-            writeDB(db);
-            user = newUser;
-        } else {
-            const userIndex = db.users.findIndex(u => u.id === user.id);
-            if (userIndex !== -1) { db.users[userIndex].lastLogin = new Date().toISOString(); writeDB(db); }
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', req.user.id)
+            .single();
+
+        if (error || !user) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
         }
-        const token = generateToken(user);
-        res.json({
-            success: true,
-            token,
-            user: {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                standoffId: user.standoffId,
-                vkId: user.vkId,
-                vkAvatar: user.vkAvatar,
-                matches: user.matches,
-                serverMatches: user.serverMatches || 0,
-                kills: user.kills,
-                deaths: user.deaths,
-                kdHistory: user.kdHistory
-            }
-        });
-    } catch (error) {
-        console.error('? VK auth error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
 
-app.get('/api/auth/me', authMiddleware, (req, res) => {
-    try {
-        const db = readDB();
-        const user = db.users.find(u => u.id === req.user.id);
-        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
         res.json({
             id: user.id,
             username: user.username,
             email: user.email,
             standoffId: user.standoffId,
-            vkId: user.vkId,
-            vkAvatar: user.vkAvatar,
             matches: user.matches,
             serverMatches: user.serverMatches || 0,
             kills: user.kills,
@@ -297,7 +221,7 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
             lastLogin: user.lastLogin
         });
     } catch (error) {
-        console.error('? Get user error:', error);
+        console.error('Get user error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -306,22 +230,28 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 // ===== СЕРВЕРА =====
 // ====================================================
 
-app.get('/api/servers', (req, res) => {
+app.get('/api/servers', async (req, res) => {
     try {
-        const db = readDB();
-        res.json(db.servers);
+        const { data, error } = await supabase
+            .from('servers')
+            .select('*')
+            .order('createdAt', { ascending: false });
+
+        if (error) throw error;
+        res.json(data || []);
     } catch (error) {
-        console.error('? Get servers error:', error);
+        console.error('Get servers error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
-app.post('/api/servers', authMiddleware, adminMiddleware, (req, res) => {
+app.post('/api/servers', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const { name, lobby, playerId, map } = req.body;
-        if (!name || !lobby || !playerId || !map)
+        if (!name || !lobby || !playerId || !map) {
             return res.status(400).json({ error: 'Все поля обязательны' });
-        const db = readDB();
+        }
+
         const newServer = {
             id: Date.now(),
             name,
@@ -329,121 +259,37 @@ app.post('/api/servers', authMiddleware, adminMiddleware, (req, res) => {
             playerId,
             map,
             status: 'online',
+            pending: [],
             createdAt: new Date().toISOString(),
             createdBy: req.user.id
         };
-        db.servers.push(newServer);
-        writeDB(db);
-        res.json({ success: true, server: newServer });
+
+        const { data, error } = await supabase
+            .from('servers')
+            .insert([newServer])
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json({ success: true, server: data });
     } catch (error) {
-        console.error('? Create server error:', error);
+        console.error('Create server error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
-app.delete('/api/servers/:id', authMiddleware, adminMiddleware, (req, res) => {
+app.delete('/api/servers/:id', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const serverId = parseInt(req.params.id);
-        const db = readDB();
-        const server = db.servers.find(s => s.id === serverId);
-        if (server) {
-            // Удаляем очередь для этого сервера
-            delete db.pendingQueues[serverId];
-        }
-        db.servers = db.servers.filter(s => s.id !== serverId);
-        writeDB(db);
+        const { error } = await supabase
+            .from('servers')
+            .delete()
+            .eq('id', serverId);
+
+        if (error) throw error;
         res.json({ success: true });
     } catch (error) {
-        console.error('? Delete server error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-// ====================================================
-// ===== ОЧЕРЕДИ ДЛЯ DM СЕРВЕРОВ =====
-// ====================================================
-
-// Получить очередь для сервера
-app.get('/api/servers/:serverId/pending', authMiddleware, (req, res) => {
-    try {
-        const serverId = parseInt(req.params.serverId);
-        const db = readDB();
-        const queue = db.pendingQueues[serverId] || [];
-        res.json(queue);
-    } catch (error) {
-        console.error('? Get pending error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-// Добавить игрока в очередь сервера
-app.post('/api/servers/:serverId/pending', authMiddleware, (req, res) => {
-    try {
-        const serverId = parseInt(req.params.serverId);
-        const { username } = req.body;
-        if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
-        
-        const db = readDB();
-        const server = db.servers.find(s => s.id === serverId);
-        if (!server) return res.status(404).json({ error: 'Сервер не найден' });
-        
-        if (!db.pendingQueues[serverId]) db.pendingQueues[serverId] = [];
-        if (db.pendingQueues[serverId].includes(username)) {
-            return res.status(400).json({ error: 'Игрок уже в очереди' });
-        }
-        
-        db.pendingQueues[serverId].push(username);
-        writeDB(db);
-        res.json({ success: true, queue: db.pendingQueues[serverId] });
-    } catch (error) {
-        console.error('? Add pending error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-// Удалить игрока из очереди сервера
-app.delete('/api/servers/:serverId/pending/:username', authMiddleware, adminMiddleware, (req, res) => {
-    try {
-        const serverId = parseInt(req.params.serverId);
-        const username = req.params.username;
-        const db = readDB();
-        
-        if (!db.pendingQueues[serverId]) db.pendingQueues[serverId] = [];
-        db.pendingQueues[serverId] = db.pendingQueues[serverId].filter(p => p !== username);
-        writeDB(db);
-        res.json({ success: true, queue: db.pendingQueues[serverId] });
-    } catch (error) {
-        console.error('? Remove pending error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-// Зачислить игрока (увеличить serverMatches)
-app.post('/api/servers/:serverId/credit/:username', authMiddleware, adminMiddleware, (req, res) => {
-    try {
-        const serverId = parseInt(req.params.serverId);
-        const username = req.params.username;
-        const db = readDB();
-        
-        // Удаляем из очереди
-        if (db.pendingQueues[serverId]) {
-            db.pendingQueues[serverId] = db.pendingQueues[serverId].filter(p => p !== username);
-        }
-        
-        // Находим пользователя и увеличиваем serverMatches
-        const user = db.users.find(u => u.username === username);
-        if (user) {
-            user.serverMatches = (user.serverMatches || 0) + 1;
-        }
-        
-        writeDB(db);
-        res.json({ 
-            success: true, 
-            message: `Игрок ${username} зачислен`,
-            queue: db.pendingQueues[serverId] || []
-        });
-    } catch (error) {
-        console.error('? Credit player error:', error);
+        console.error('Delete server error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -452,188 +298,70 @@ app.post('/api/servers/:serverId/credit/:username', authMiddleware, adminMiddlew
 // ===== АДМИНЫ =====
 // ====================================================
 
-app.get('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
-    try { const db = readDB(); res.json(db.admins); } 
-    catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
+app.get('/api/admins', authMiddleware, adminMiddleware, async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('admins')
+            .select('email');
+
+        if (error) throw error;
+        res.json(data.map(a => a.email) || []);
+    } catch (error) {
+        console.error('Get admins error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
 });
 
-app.post('/api/admins', authMiddleware, adminMiddleware, (req, res) => {
+app.post('/api/admins', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const { email } = req.body;
         if (!email) return res.status(400).json({ error: 'Email обязателен' });
-        const db = readDB();
-        const user = db.users.find(u => u.email === email);
-        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-        if (db.admins.includes(email)) return res.status(400).json({ error: 'Уже администратор' });
-        db.admins.push(email);
-        writeDB(db);
-        res.json({ success: true, admins: db.admins });
-    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
+
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('email')
+            .eq('email', email)
+            .single();
+
+        if (userError || !user) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+
+        const { data, error } = await supabase
+            .from('admins')
+            .insert([{ email }])
+            .select();
+
+        if (error) {
+            if (error.code === '23505') {
+                return res.status(400).json({ error: 'Уже администратор' });
+            }
+            throw error;
+        }
+
+        res.json({ success: true, admins: data.map(a => a.email) });
+    } catch (error) {
+        console.error('Add admin error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
 });
 
-app.delete('/api/admins/:email', authMiddleware, adminMiddleware, (req, res) => {
+app.delete('/api/admins/:email', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const email = decodeURIComponent(req.params.email);
         if (email === SUPER_ADMIN_EMAIL) {
             return res.status(400).json({ error: 'Нельзя удалить главного администратора' });
         }
-        const db = readDB();
-        db.admins = db.admins.filter(e => e !== email);
-        writeDB(db);
-        res.json({ success: true, admins: db.admins });
-    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
-});
 
-// ====================================================
-// ===== ПОИСК 5v5 =====
-// ====================================================
+        const { error } = await supabase
+            .from('admins')
+            .delete()
+            .eq('email', email);
 
-app.get('/api/search-players', authMiddleware, (req, res) => {
-    try {
-        const db = readDB();
-        res.json(db.searchPlayers || []);
-    } catch (error) {
-        console.error('? Get search players error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-app.post('/api/search-players', authMiddleware, (req, res) => {
-    try {
-        const { username } = req.body;
-        if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
-        const db = readDB();
-        if (!db.searchPlayers) db.searchPlayers = [];
-        if (db.searchPlayers.includes(username)) {
-            return res.status(400).json({ error: 'Уже в поиске' });
-        }
-        db.searchPlayers.push(username);
-        writeDB(db);
-        res.json({ success: true, players: db.searchPlayers });
-    } catch (error) {
-        console.error('? Add search player error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-app.delete('/api/search-players', authMiddleware, (req, res) => {
-    try {
-        const { username } = req.body;
-        if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
-        const db = readDB();
-        if (!db.searchPlayers) db.searchPlayers = [];
-        db.searchPlayers = db.searchPlayers.filter(p => p !== username);
-        writeDB(db);
-        res.json({ success: true, players: db.searchPlayers });
-    } catch (error) {
-        console.error('? Remove search player error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-// ====================================================
-// ===== МАТЧИ 5v5 =====
-// ====================================================
-
-app.get('/api/matches', authMiddleware, (req, res) => {
-    try {
-        const db = readDB();
-        res.json(db.matches || []);
-    } catch (error) {
-        console.error('? Get matches error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-app.get('/api/matches/:id', authMiddleware, (req, res) => {
-    try {
-        const db = readDB();
-        const match = db.matches.find(m => m.id === req.params.id);
-        if (!match) return res.status(404).json({ error: 'Матч не найден' });
-        res.json(match);
-    } catch (error) {
-        console.error('? Get match error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-app.post('/api/matches', authMiddleware, (req, res) => {
-    try {
-        const { players } = req.body;
-        if (!players || players.length < 10) {
-            return res.status(400).json({ error: 'Нужно минимум 10 игроков' });
-        }
-
-        const db = readDB();
-        const matchId = 'match_' + Date.now();
-        
-        const shuffled = [...players].sort(() => Math.random() - 0.5);
-        const half = Math.ceil(shuffled.length / 2);
-        const terrorist = shuffled.slice(0, half).map(p => ({ username: p, captain: false }));
-        const counter = shuffled.slice(half).map(p => ({ username: p, captain: false }));
-        
-        if (terrorist.length > 0) terrorist[0].captain = true;
-        if (counter.length > 0) counter[0].captain = true;
-
-        const newMatch = {
-            id: matchId,
-            terrorist: terrorist,
-            counter: counter,
-            bans: [],
-            selectedMap: null,
-            link: null,
-            resultImage: null,
-            status: 'ban_phase',
-            currentBanTurn: 'terrorist',
-            createdAt: new Date().toISOString(),
-            createdBy: req.user.id
-        };
-
-        db.matches.push(newMatch);
-        writeDB(db);
-        
-        res.json({ success: true, match: newMatch });
-    } catch (error) {
-        console.error('? Create match error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-app.put('/api/matches/:id', authMiddleware, (req, res) => {
-    try {
-        const matchId = req.params.id;
-        const updates = req.body;
-        const db = readDB();
-        
-        const matchIndex = db.matches.findIndex(m => m.id === matchId);
-        if (matchIndex === -1) return res.status(404).json({ error: 'Матч не найден' });
-        
-        const match = db.matches[matchIndex];
-        if (updates.bans !== undefined) match.bans = updates.bans;
-        if (updates.selectedMap !== undefined) match.selectedMap = updates.selectedMap;
-        if (updates.link !== undefined) match.link = updates.link;
-        if (updates.resultImage !== undefined) match.resultImage = updates.resultImage;
-        if (updates.status !== undefined) match.status = updates.status;
-        if (updates.currentBanTurn !== undefined) match.currentBanTurn = updates.currentBanTurn;
-        
-        db.matches[matchIndex] = match;
-        writeDB(db);
-        res.json({ success: true, match: match });
-    } catch (error) {
-        console.error('? Update match error:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-app.delete('/api/matches/:id', authMiddleware, (req, res) => {
-    try {
-        const matchId = req.params.id;
-        const db = readDB();
-        db.matches = db.matches.filter(m => m.id !== matchId);
-        writeDB(db);
+        if (error) throw error;
         res.json({ success: true });
     } catch (error) {
-        console.error('? Delete match error:', error);
+        console.error('Remove admin error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -642,85 +370,78 @@ app.delete('/api/matches/:id', authMiddleware, (req, res) => {
 // ===== СТАТИСТИКА =====
 // ====================================================
 
-app.post('/api/users/:userId/stats', authMiddleware, (req, res) => {
+app.get('/api/stats', async (req, res) => {
     try {
-        const userId = req.params.userId;
-        const { kills, deaths } = req.body;
-        if (userId !== req.user.id) return res.status(403).json({ error: 'Недостаточно прав' });
-        const db = readDB();
-        const userIndex = db.users.findIndex(u => u.id === userId);
-        if (userIndex === -1) return res.status(404).json({ error: 'Пользователь не найден' });
-        const user = db.users[userIndex];
-        user.kills += kills || 0;
-        user.deaths += deaths || 0;
-        user.matches += 1;
-        const kd = user.deaths > 0 ? (user.kills / user.deaths) : user.kills;
-        user.kdHistory.push(parseFloat(kd.toFixed(2)));
-        if (user.kdHistory.length > 10) user.kdHistory.shift();
-        writeDB(db);
-        res.json({
-            success: true,
-            user: {
-                id: user.id,
-                username: user.username,
-                matches: user.matches,
-                serverMatches: user.serverMatches || 0,
-                kills: user.kills,
-                deaths: user.deaths,
-                kdHistory: user.kdHistory
-            }
-        });
-    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
-});
+        const { count: totalUsers, error: usersError } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true });
 
-app.get('/api/top-players', (req, res) => {
-    try {
-        const db = readDB();
-        const topPlayers = db.users.map(user => ({
-            username: user.username,
-            standoffId: user.standoffId,
-            kills: user.kills,
-            matches: user.matches,
-            serverMatches: user.serverMatches || 0,
-            kd: user.deaths > 0 ? (user.kills / user.deaths).toFixed(2) : user.kills.toFixed(2)
-        })).sort((a, b) => b.serverMatches - a.serverMatches).slice(0, 10);
-        res.json(topPlayers);
-    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
-});
+        if (usersError) throw usersError;
 
-app.get('/api/stats', (req, res) => {
-    try {
-        const db = readDB();
-        const totalPending = Object.values(db.pendingQueues || {}).reduce((acc, arr) => acc + arr.length, 0);
+        const { count: serversCount, error: serversError } = await supabase
+            .from('servers')
+            .select('*', { count: 'exact', head: true });
+
+        if (serversError) throw serversError;
+
         res.json({
             online: Math.floor(Math.random() * 150) + 50,
-            tournaments: db.stats.totalTournaments || 0,
-            servers: db.servers.length,
-            totalUsers: db.users.length,
-            matches: db.matches ? db.matches.length : 0,
-            pendingCount: totalPending,
-            searchCount: db.searchPlayers ? db.searchPlayers.length : 0
+            tournaments: 0,
+            servers: serversCount || 0,
+            totalUsers: totalUsers || 0,
+            pendingCount: 0,
+            matches: 0
         });
-    } catch (error) { res.status(500).json({ error: 'Ошибка сервера' }); }
+    } catch (error) {
+        console.error('Get stats error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ====================================================
+// ===== ТОП ИГРОКОВ =====
+// ====================================================
+
+app.get('/api/top-players', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('username, standoffId, kills, matches, serverMatches, deaths')
+            .order('serverMatches', { ascending: false })
+            .limit(10);
+
+        if (error) throw error;
+
+        const topPlayers = (data || []).map(user => ({
+            username: user.username,
+            standoffId: user.standoffId,
+            kills: user.kills || 0,
+            matches: user.matches || 0,
+            serverMatches: user.serverMatches || 0,
+            kd: user.deaths > 0 ? (user.kills / user.deaths).toFixed(2) : (user.kills > 0 ? user.kills.toFixed(2) : '0.00')
+        }));
+
+        res.json(topPlayers);
+    } catch (error) {
+        console.error('Get top players error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
 });
 
 // ====================================================
 // ===== ЗАПУСК =====
 // ====================================================
 
-initDB();
-
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`?? Server running on port ${PORT}`);
-    console.log(`?? Database: ${DB_PATH}`);
-    console.log(`?? Супер-админ: ${SUPER_ADMIN_EMAIL}`);
-    console.log(`?? JWT_SECRET: ${process.env.JWT_SECRET ? '? Установлен' : '? НЕ УСТАНОВЛЕН (используется default)'}`);
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 Connected to Supabase`);
+    console.log(`👑 Супер-админ: ${SUPER_ADMIN_EMAIL}`);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('?? Необработанное исключение:', error);
+    console.error('🔥 Uncaught exception:', error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('?? Необработанный rejection:', reason);
+    console.error('🔥 Unhandled rejection:', reason);
 });
