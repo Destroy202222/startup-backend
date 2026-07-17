@@ -9,6 +9,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ===== НАСТРОЙКИ =====
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 
@@ -191,6 +192,94 @@ app.post('/api/auth/login', async (req, res) => {
         });
     } catch (error) {
         console.error('Login error:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ===== НОВЫЙ ЭНДПОИНТ ДЛЯ ТЕЛЕГРАМ =====
+app.post('/api/auth/telegram', async (req, res) => {
+    try {
+        const { telegramId, firstName, lastName, username } = req.body;
+        
+        if (!telegramId) {
+            return res.status(400).json({ error: 'Telegram ID обязателен' });
+        }
+
+        // Проверяем, есть ли пользователь с таким telegramId
+        const { data: existing, error: checkError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('vkId', telegramId.toString())
+            .maybeSingle();
+
+        if (existing) {
+            // Пользователь уже есть — логиним
+            const token = generateToken(existing);
+            return res.json({
+                success: true,
+                token,
+                user: {
+                    id: existing.id,
+                    username: existing.username,
+                    email: existing.email,
+                    standoffId: existing.standoffId,
+                    matches: existing.matches,
+                    serverMatches: existing.serverMatches || 0,
+                    kills: existing.kills,
+                    deaths: existing.deaths,
+                    kdHistory: existing.kdHistory
+                }
+            });
+        }
+
+        // Создаём нового пользователя
+        const newUsername = username || firstName.toLowerCase() + '_' + telegramId;
+        const email = `${telegramId}@telegram.com`;
+        const standoffId = telegramId.toString().slice(0, 9);
+
+        const hashedPassword = await bcrypt.hash(`tg_${telegramId}`, 10);
+        const newUser = {
+            id: uuidv4(),
+            username: newUsername,
+            email,
+            standoffId,
+            password: hashedPassword,
+            vkId: telegramId.toString(),
+            matches: 0,
+            kills: 0,
+            deaths: 0,
+            serverMatches: 0,
+            kdHistory: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registered: new Date().toISOString(),
+            lastLogin: new Date().toISOString()
+        };
+
+        const { data, error } = await supabase
+            .from('users')
+            .insert([newUser])
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        const token = generateToken(data);
+        res.json({
+            success: true,
+            token,
+            user: {
+                id: data.id,
+                username: data.username,
+                email: data.email,
+                standoffId: data.standoffId,
+                matches: data.matches,
+                serverMatches: data.serverMatches || 0,
+                kills: data.kills,
+                deaths: data.deaths,
+                kdHistory: data.kdHistory
+            }
+        });
+    } catch (error) {
+        console.error('Telegram auth error:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
