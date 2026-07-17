@@ -13,10 +13,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 
-// ===== ПОДКЛЮЧЕНИЕ К SUPABASE =====
-// ВАШИ ДАННЫЕ ИЗ SUPABASE:
-const SUPABASE_URL = 'https://juxdegzpajulauxecyml.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_diBYI198jT9-OvGLj6-6-w_I9xTMx9_';
+// ===== ПОДКЛЮЧЕНИЕ К НОВОЙ SUPABASE =====
+const SUPABASE_URL = 'https://dlprylagddsmtzpmzxqy.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRscHJ5bGFnZGRzbXR6cG16eHF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMDY5MjcsImV4cCI6MjA5OTg4MjkyN30.xyRO-nChHDfqFgtYkhsMOkM3F8BsZGOvacQ0zhjBuRI';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const SUPER_ADMIN_EMAIL = 'startup@mail.ru';
@@ -207,7 +206,6 @@ app.post('/api/auth/telegram', async (req, res) => {
             return res.status(400).json({ error: 'Telegram ID обязателен' });
         }
 
-        // Проверяем, есть ли пользователь с таким telegramId
         const { data: existing, error: checkError } = await supabase
             .from('users')
             .select('*')
@@ -215,7 +213,6 @@ app.post('/api/auth/telegram', async (req, res) => {
             .maybeSingle();
 
         if (existing) {
-            // Пользователь уже есть — логиним
             const token = generateToken(existing);
             return res.json({
                 success: true,
@@ -234,7 +231,6 @@ app.post('/api/auth/telegram', async (req, res) => {
             });
         }
 
-        // Создаём нового пользователя
         const newUsername = username || firstName.toLowerCase() + '_' + telegramId;
         const email = `${telegramId}@telegram.com`;
         const standoffId = telegramId.toString().slice(0, 9);
@@ -477,7 +473,6 @@ app.post('/api/servers/:serverId/credit/:username', authMiddleware, adminMiddlew
         const serverId = parseInt(req.params.serverId);
         const username = req.params.username;
 
-        // Удаляем из очереди
         const { data: server, error: serverError } = await supabase
             .from('servers')
             .select('pending')
@@ -494,7 +489,6 @@ app.post('/api/servers/:serverId/credit/:username', authMiddleware, adminMiddlew
             .update({ pending })
             .eq('id', serverId);
 
-        // Увеличиваем serverMatches у пользователя
         const { data: user, error: userError } = await supabase
             .from('users')
             .select('serverMatches')
@@ -804,7 +798,6 @@ app.get('/api/stats', async (req, res) => {
 
         if (searchError) throw searchError;
 
-        // Считаем общее количество игроков в очередях
         const { data: serversData, error: serversDataError } = await supabase
             .from('servers')
             .select('pending');
@@ -864,7 +857,7 @@ app.get('/api/top-players', async (req, res) => {
 });
 
 // ====================================================
-// ===== СИНХРОНИЗАЦИЯ (ДЛЯ ЛОКАЛЬНЫХ ДАННЫХ) =====
+// ===== СИНХРОНИЗАЦИЯ =====
 // ====================================================
 
 app.post('/api/sync', authMiddleware, async (req, res) => {
@@ -872,7 +865,6 @@ app.post('/api/sync', authMiddleware, async (req, res) => {
         const { users, servers, admins } = req.body;
         const results = [];
 
-        // Синхронизация пользователей
         if (users) {
             for (const user of users) {
                 const { data, error } = await supabase
@@ -883,7 +875,6 @@ app.post('/api/sync', authMiddleware, async (req, res) => {
             }
         }
 
-        // Синхронизация серверов
         if (servers) {
             for (const server of servers) {
                 const { data, error } = await supabase
@@ -894,7 +885,6 @@ app.post('/api/sync', authMiddleware, async (req, res) => {
             }
         }
 
-        // Синхронизация админов
         if (admins) {
             for (const admin of admins) {
                 const { data, error } = await supabase
