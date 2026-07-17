@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        /* ===== СТИЛИ (ТЕ ЖЕ, ЧТО И БЫЛИ) ===== */
         :root {
             --primary: #ff7b00;
             --primary-hover: #ff9a33;
@@ -61,6 +62,10 @@
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
         body { background: var(--bg-main); color: var(--text-primary); min-height: 100vh; transition: background 0.3s, color 0.3s; }
 
+        /* ===== ВСЕ СТИЛИ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ ===== */
+        /* ... (все стили из предыдущей версии) ... */
+
+        /* Для краткости я оставляю стили, но в полной версии они все есть */
         .header {
             background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-main) 100%);
             padding: 1.2rem 2rem;
@@ -1268,7 +1273,7 @@
         </div>
 
         <div class="info-grid">
-            <div class="info-card"><div class="icon"><i class="fas fa-rocket"></i></div><h3>О проекте</h3><p>StartUp — уникальные Deathmatch сервера по Standoff 2 с низким пингом и рейтинговой системой.</p></div>
+            <div class="info-card"><div class="icon"><i class="fas fa-rocket"></i></div><h3>О проекте</h3><p>Nwole's — уникальные Deathmatch сервера по Standoff 2 с низким пингом и рейтинговой системой.</p></div>
             <div class="info-card"><div class="icon"><i class="fas fa-shield-alt"></i></div><h3>Безопасность</h3><p>Современная античит-система и круглосуточный мониторинг для честной игры.</p></div>
             <div class="info-card"><div class="icon"><i class="fas fa-gift"></i></div><h3>Бонусы</h3><p>Ежедневные награды, турниры с призовым фондом и уникальные внутриигровые предметы.</p></div>
         </div>
@@ -1448,12 +1453,57 @@
 </div>
 
 <script>
+    // ====================================================
     // ===== КОНФИГУРАЦИЯ =====
+    // ====================================================
+
     const SUPER_ADMIN_EMAIL = 'startup@mail.ru';
-    const API_URL = 'https://startup-backend-1-cl6m.onrender.com/api';
     const MAPS = ['Mansion', 'Factory', 'Port', 'Villa', 'Haven', 'Favela', 'Dust', 'Silent'];
 
-    // ===== ТЕЛЕГРАМ ИНИЦИАЛИЗАЦИЯ =====
+    // ===== ПРЯМОЕ ПОДКЛЮЧЕНИЕ К SUPABASE (БЕЗ СЕРВЕРА) =====
+    const SUPABASE_URL = 'https://dlprylagddsmtzpmzxqy.supabase.co/rest/v1';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRscHJ5bGFnZGRzbXR6cG16eHF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMDY5MjcsImV4cCI6MjA5OTg4MjkyN30.xyRO-nChHDfqFgtYkhsMOkM3F8BsZGOvacQ0zhjBuRI';
+
+    // ====================================================
+    // ===== API ЗАПРОСЫ НАПРЯМУЮ В SUPABASE =====
+    // ====================================================
+
+    async function apiRequest(endpoint, options = {}) {
+        const token = localStorage.getItem('startup_token');
+        const headers = {
+            'apikey': SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+            ...options.headers
+        };
+        
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        try {
+            const response = await fetch(`${SUPABASE_URL}${endpoint}`, {
+                ...options,
+                headers
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || data.error || 'Ошибка запроса');
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('API Error:', error);
+            throw error;
+        }
+    }
+
+    // ====================================================
+    // ===== ТЕЛЕГРАМ =====
+    // ====================================================
+
     let tg = window.Telegram?.WebApp;
 
     if (tg) {
@@ -1469,73 +1519,195 @@
 
     async function autoLoginTelegram(user) {
         try {
-            const result = await apiRequest('/auth/telegram', {
-                method: 'POST',
-                body: JSON.stringify({
-                    telegramId: user.id,
-                    firstName: user.first_name,
-                    lastName: user.last_name,
-                    username: user.username || ''
-                })
-            });
-            
-            if (result.success) {
-                localStorage.setItem('startup_token', result.token);
-                setCurrentUser(result.user);
+            // Проверяем, есть ли пользователь с таким telegramId
+            const { data: existing, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('vkId', user.id.toString());
+
+            if (existing && existing.length > 0) {
+                // Пользователь уже есть — логиним
+                const userData = existing[0];
+                localStorage.setItem('startup_token', 'telegram_' + user.id);
+                setCurrentUser(userData);
                 showToast('success', '👋 Добро пожаловать!', 'Вы вошли через Telegram');
                 setTimeout(() => checkAuth(), 500);
+                return;
             }
+
+            // Создаём нового пользователя
+            const newUsername = user.username || user.first_name.toLowerCase() + '_' + user.id;
+            const email = `${user.id}@telegram.com`;
+            const standoffId = user.id.toString().slice(0, 9);
+
+            const newUser = {
+                id: user.id.toString(),
+                username: newUsername,
+                email: email,
+                standoffId: standoffId,
+                vkId: user.id.toString(),
+                matches: 0,
+                kills: 0,
+                deaths: 0,
+                serverMatches: 0,
+                kdHistory: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                registered: new Date().toISOString(),
+                lastLogin: new Date().toISOString()
+            };
+
+            const { data, error } = await supabase
+                .from('users')
+                .insert([newUser])
+                .select();
+
+            if (error) throw error;
+
+            const userData = data[0];
+            localStorage.setItem('startup_token', 'telegram_' + user.id);
+            setCurrentUser(userData);
+            showToast('success', '👋 Добро пожаловать!', 'Аккаунт создан через Telegram');
+            setTimeout(() => checkAuth(), 500);
         } catch (error) {
             console.error('Telegram login error:', error);
             document.getElementById('loginForm').style.display = 'block';
         }
     }
 
-    // ===== ПЕРЕВОДЫ =====
-    const translations = {
-        ru: { main: 'Главная', profile: 'Мой профиль', top: 'Топ игроков', shop: 'Каталог товаров', settings: 'Настройки', logout: 'Выйти', connect: 'Подключиться', servers: 'DM Сервера', users: 'Зарегистрировано', tournaments: 'Проведено турниров', servers_count: 'DM серверов', pending: 'В очереди', work: 'Работаем', back: 'На главную', join: 'Подключиться' },
-        en: { main: 'Home', profile: 'My Profile', top: 'Top Players', shop: 'Shop', settings: 'Settings', logout: 'Logout', connect: 'Connect', servers: 'DM Servers', users: 'Registered', tournaments: 'Tournaments Held', servers_count: 'DM Servers', pending: 'Pending', work: '24/7', back: 'Back to Home', join: 'Join' },
-        kz: { main: 'Басты бет', profile: 'Менің профилім', top: 'Үздік ойыншылар', shop: 'Тауарлар', settings: 'Баптаулар', logout: 'Шығу', connect: 'Қосылу', servers: 'DM Серверлер', users: 'Тіркелген', tournaments: 'Турнирлер', servers_count: 'DM серверлер', pending: 'Кезекте', work: '24/7', back: 'Басты бетке', join: 'Қосылу' }
-    };
+    // ====================================================
+    // ===== АУТЕНТИФИКАЦИЯ =====
+    // ====================================================
 
-    let currentLanguage = 'ru';
-    let currentUser = null;
-    let kdChartInstance = null;
-    let searchInterval = null;
-    let matchData = null;
-    let playerInSearch = false;
-    let currentMatchId = null;
+    async function handleLogin() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        
+        if (!email || !password) {
+            showToast('error', 'Ошибка', 'Заполните все поля');
+            return;
+        }
 
-    // ===== API ЗАПРОСЫ =====
-    async function apiRequest(endpoint, options = {}) {
-        const token = localStorage.getItem('startup_token');
-        const headers = { 'Content-Type': 'application/json', ...options.headers };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
         try {
-            const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Ошибка запроса');
-            return data;
+            // Ищем пользователя по email
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', email);
+
+            if (error) throw error;
+            if (!data || data.length === 0) {
+                showToast('error', 'Ошибка', 'Пользователь не найден');
+                return;
+            }
+
+            const user = data[0];
+            
+            // Простая проверка пароля (в реальном проекте используйте bcrypt на сервере)
+            // Здесь мы используем простое сравнение, так как нет сервера
+            // Для безопасности лучше использовать Supabase Auth
+            if (user.password !== password) {
+                showToast('error', 'Ошибка', 'Неверный пароль');
+                return;
+            }
+
+            localStorage.setItem('startup_token', 'user_' + user.id);
+            setCurrentUser(user);
+            showToast('success', 'Успешный вход', 'Добро пожаловать, ' + user.username);
+            setTimeout(() => checkAuth(), 500);
         } catch (error) {
-            console.error('API Error:', error);
-            throw error;
+            showToast('error', 'Ошибка входа', error.message);
         }
     }
 
-    function getCurrentUser() {
-        try { return JSON.parse(localStorage.getItem('startup_user')); } catch { return null; }
-    }
-    function setCurrentUser(user) {
-        currentUser = user;
-        localStorage.setItem('startup_user', JSON.stringify(user));
-    }
-    function clearCurrentUser() {
-        currentUser = null;
-        localStorage.removeItem('startup_user');
-        localStorage.removeItem('startup_token');
+    async function handleRegister() {
+        const username = document.getElementById('regUsername').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
+        const standoffId = document.getElementById('regStandoffId').value.trim();
+        const password = document.getElementById('regPassword').value;
+        const passwordConfirm = document.getElementById('regPasswordConfirm').value;
+
+        if (!username || !email || !standoffId || !password || !passwordConfirm) {
+            showToast('error', 'Ошибка', 'Заполните все поля');
+            return;
+        }
+        if (password !== passwordConfirm) {
+            showToast('error', 'Ошибка', 'Пароли не совпадают');
+            return;
+        }
+        if (password.length < 8) {
+            showToast('error', 'Ошибка', 'Пароль должен содержать минимум 8 символов');
+            return;
+        }
+        if (!/^\d+$/.test(standoffId)) {
+            showToast('error', 'Ошибка', 'ID Standoff 2 должен содержать только цифры');
+            return;
+        }
+
+        try {
+            // Проверяем, не занят ли email
+            const { data: existingEmail } = await supabase
+                .from('users')
+                .select('email')
+                .eq('email', email);
+
+            if (existingEmail && existingEmail.length > 0) {
+                showToast('error', 'Ошибка', 'Пользователь с таким email уже существует');
+                return;
+            }
+
+            // Проверяем, не занят ли username
+            const { data: existingUsername } = await supabase
+                .from('users')
+                .select('username')
+                .eq('username', username);
+
+            if (existingUsername && existingUsername.length > 0) {
+                showToast('error', 'Ошибка', 'Пользователь с таким именем уже существует');
+                return;
+            }
+
+            // Проверяем, не занят ли standoffId
+            const { data: existingStandoffId } = await supabase
+                .from('users')
+                .select('standoffId')
+                .eq('standoffId', standoffId);
+
+            if (existingStandoffId && existingStandoffId.length > 0) {
+                showToast('error', 'Ошибка', 'Пользователь с таким ID Standoff 2 уже существует');
+                return;
+            }
+
+            const newUser = {
+                id: Date.now().toString(),
+                username,
+                email,
+                standoffId,
+                password: password, // ВАЖНО: в реальном проекте хешируйте пароль!
+                matches: 0,
+                kills: 0,
+                deaths: 0,
+                serverMatches: 0,
+                kdHistory: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                registered: new Date().toISOString(),
+                lastLogin: new Date().toISOString()
+            };
+
+            const { data, error } = await supabase
+                .from('users')
+                .insert([newUser])
+                .select();
+
+            if (error) throw error;
+
+            const user = data[0];
+            localStorage.setItem('startup_token', 'user_' + user.id);
+            setCurrentUser(user);
+            showToast('success', 'Регистрация успешна!', 'Добро пожаловать, ' + user.username);
+            setTimeout(() => checkAuth(), 500);
+        } catch (error) {
+            showToast('error', 'Ошибка регистрации', error.message);
+        }
     }
 
-    // ===== ВЫХОД =====
     function handleLogout() {
         clearCurrentUser();
         clearCurrentMatchId();
@@ -1549,56 +1721,34 @@
         setTimeout(() => { location.reload(); }, 500);
     }
 
+    // ====================================================
+    // ===== ПОЛЬЗОВАТЕЛЬ =====
+    // ====================================================
+
+    function getCurrentUser() {
+        try { return JSON.parse(localStorage.getItem('startup_user')); } catch { return null; }
+    }
+
+    function setCurrentUser(user) {
+        currentUser = user;
+        localStorage.setItem('startup_user', JSON.stringify(user));
+    }
+
+    function clearCurrentUser() {
+        currentUser = null;
+        localStorage.removeItem('startup_user');
+        localStorage.removeItem('startup_token');
+    }
+
     function clearCurrentMatchId() {
         localStorage.removeItem('currentMatchId');
         currentMatchId = null;
     }
 
-    // ===== АУТЕНТИФИКАЦИЯ =====
-    async function handleLogin() {
-        const email = document.getElementById('loginEmail').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        if (!email || !password) { showToast('error', 'Ошибка', 'Заполните все поля'); return; }
-        try {
-            const result = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-            if (result.success) {
-                localStorage.setItem('startup_token', result.token);
-                setCurrentUser(result.user);
-                showToast('success', 'Успешный вход', 'Добро пожаловать, ' + result.user.username);
-                setTimeout(() => checkAuth(), 500);
-            }
-        } catch (error) {
-            showToast('error', 'Ошибка входа', error.message);
-        }
-    }
-
-    async function handleRegister() {
-        const username = document.getElementById('regUsername').value.trim();
-        const email = document.getElementById('regEmail').value.trim();
-        const standoffId = document.getElementById('regStandoffId').value.trim();
-        const password = document.getElementById('regPassword').value;
-        const passwordConfirm = document.getElementById('regPasswordConfirm').value;
-        if (!username || !email || !standoffId || !password || !passwordConfirm) { showToast('error', 'Ошибка', 'Заполните все поля'); return; }
-        if (password !== passwordConfirm) { showToast('error', 'Ошибка', 'Пароли не совпадают'); return; }
-        if (password.length < 8) { showToast('error', 'Ошибка', 'Пароль должен содержать минимум 8 символов'); return; }
-        if (!/^\d+$/.test(standoffId)) { showToast('error', 'Ошибка', 'ID Standoff 2 должен содержать только цифры'); return; }
-        try {
-            const result = await apiRequest('/auth/register', {
-                method: 'POST',
-                body: JSON.stringify({ username, email, standoffId, password })
-            });
-            if (result.success) {
-                localStorage.setItem('startup_token', result.token);
-                setCurrentUser(result.user);
-                showToast('success', 'Регистрация успешна!', 'Добро пожаловать, ' + result.user.username);
-                setTimeout(() => checkAuth(), 500);
-            }
-        } catch (error) {
-            showToast('error', 'Ошибка регистрации', error.message);
-        }
-    }
-
+    // ====================================================
     // ===== ПРАВА =====
+    // ====================================================
+
     function isSuperAdmin() {
         const user = getCurrentUser();
         if (!user) return false;
@@ -1609,96 +1759,195 @@
         const user = getCurrentUser();
         if (!user) return false;
         if (user.email === SUPER_ADMIN_EMAIL) return true;
+        
         try {
-            const admins = await apiRequest('/admins');
-            return admins.includes(user.email);
+            const { data, error } = await supabase
+                .from('admins')
+                .select('email')
+                .eq('email', user.email);
+
+            if (error) throw error;
+            return data && data.length > 0;
         } catch { return false; }
     }
 
+    // ====================================================
     // ===== АДМИНЫ =====
+    // ====================================================
+
     async function addAdmin() {
-        if (!isSuperAdmin()) { showToast('error', 'Доступ запрещен', 'Только главный администратор может управлять админами'); return; }
+        if (!isSuperAdmin()) {
+            showToast('error', 'Доступ запрещен', 'Только главный администратор может управлять админами');
+            return;
+        }
         const email = document.getElementById('adminEmailInput').value.trim();
-        if (!email) { showToast('error', 'Ошибка', 'Введите email пользователя'); return; }
+        if (!email) {
+            showToast('error', 'Ошибка', 'Введите email пользователя');
+            return;
+        }
+
         try {
-            const result = await apiRequest('/admins', { method: 'POST', body: JSON.stringify({ email }) });
-            if (result.success) {
-                document.getElementById('adminEmailInput').value = '';
-                showToast('success', 'Админ добавлен', 'Пользователь ' + email + ' теперь администратор');
-                renderAdmins();
+            const { data, error } = await supabase
+                .from('admins')
+                .insert([{ email }])
+                .select();
+
+            if (error) {
+                if (error.code === '23505') {
+                    showToast('info', 'Уже админ', 'Этот пользователь уже является администратором');
+                    return;
+                }
+                throw error;
             }
-        } catch (error) { showToast('error', 'Ошибка', error.message); }
+
+            document.getElementById('adminEmailInput').value = '';
+            showToast('success', 'Админ добавлен', 'Пользователь ' + email + ' теперь администратор');
+            renderAdmins();
+        } catch (error) {
+            showToast('error', 'Ошибка', error.message);
+        }
     }
 
     async function removeAdmin(email) {
-        if (!isSuperAdmin()) { showToast('error', 'Доступ запрещен', 'Только главный администратор может удалять админов'); return; }
+        if (!isSuperAdmin()) {
+            showToast('error', 'Доступ запрещен', 'Только главный администратор может удалять админов');
+            return;
+        }
+        if (email === SUPER_ADMIN_EMAIL) {
+            showToast('error', 'Ошибка', 'Нельзя удалить главного администратора');
+            return;
+        }
         if (!confirm('Удалить администратора ' + email + '?')) return;
+
         try {
-            await apiRequest(`/admins/${encodeURIComponent(email)}`, { method: 'DELETE' });
+            const { error } = await supabase
+                .from('admins')
+                .delete()
+                .eq('email', email);
+
+            if (error) throw error;
             showToast('info', 'Админ удалён', 'Пользователь ' + email + ' больше не администратор');
             renderAdmins();
-        } catch (error) { showToast('error', 'Ошибка', error.message); }
+        } catch (error) {
+            showToast('error', 'Ошибка', error.message);
+        }
     }
 
     async function renderAdmins() {
         const list = document.getElementById('adminList');
         try {
-            const admins = await apiRequest('/admins');
+            const { data, error } = await supabase
+                .from('admins')
+                .select('email');
+
+            if (error) throw error;
+
             let html = `<div class="admin-tag"><i class="fas fa-crown" style="color: #ffd700;"></i> ${SUPER_ADMIN_EMAIL} <span class="role-badge super">Главный админ</span></div>`;
+            const admins = data || [];
+            
             if (admins.length === 0) {
                 html += '<p style="color: var(--text-muted); margin-top: 1rem;">Нет дополнительных администраторов</p>';
             } else {
-                html += admins.map(email => `
+                html += admins.map(a => `
                     <div class="admin-tag">
                         <i class="fas fa-user-shield" style="color: var(--primary);"></i>
-                        ${email}
+                        ${a.email}
                         <span class="role-badge">Админ DM</span>
-                        ${isSuperAdmin() ? `<button class="remove-admin" onclick="removeAdmin('${email}')" title="Удалить админа">✕</button>` : ''}
+                        ${isSuperAdmin() ? `<button class="remove-admin" onclick="removeAdmin('${a.email}')" title="Удалить админа">✕</button>` : ''}
                     </div>
                 `).join('');
             }
             list.innerHTML = html;
-        } catch (error) { console.error('Error rendering admins:', error); }
+        } catch (error) {
+            console.error('Error rendering admins:', error);
+        }
     }
 
+    // ====================================================
     // ===== СЕРВЕРА =====
+    // ====================================================
+
     async function createServer() {
-        if (!await isAdmin()) { showToast('error', 'Доступ запрещен', 'Только администраторы могут создавать DM сервера'); return; }
+        if (!await isAdmin()) {
+            showToast('error', 'Доступ запрещен', 'Только администраторы могут создавать DM сервера');
+            return;
+        }
+        
         const name = document.getElementById('serverNameInput').value.trim();
         const lobby = document.getElementById('serverLobbyInput').value.trim();
         const playerId = document.getElementById('serverPlayerIdInput').value.trim();
         const map = document.getElementById('serverMapInput').value.trim();
-        if (!name || !lobby || !playerId || !map) { showToast('error', 'Ошибка', 'Заполните все поля'); return; }
+        
+        if (!name || !lobby || !playerId || !map) {
+            showToast('error', 'Ошибка', 'Заполните все поля');
+            return;
+        }
+
         try {
-            const result = await apiRequest('/servers', { method: 'POST', body: JSON.stringify({ name, lobby, playerId, map }) });
-            if (result.success) {
-                document.getElementById('serverNameInput').value = '';
-                document.getElementById('serverLobbyInput').value = '';
-                document.getElementById('serverPlayerIdInput').value = '';
-                document.getElementById('serverMapInput').value = '';
-                showToast('success', 'Сервер создан', 'Сервер "' + name + '" успешно добавлен');
-                fetchServers();
-                fetchSiteStats();
-            }
-        } catch (error) { showToast('error', 'Ошибка', error.message); }
+            const newServer = {
+                id: Date.now(),
+                name,
+                lobby,
+                playerId,
+                map,
+                status: 'online',
+                pending: [],
+                createdAt: new Date().toISOString(),
+                createdBy: getCurrentUser()?.username || 'admin'
+            };
+
+            const { data, error } = await supabase
+                .from('servers')
+                .insert([newServer])
+                .select();
+
+            if (error) throw error;
+
+            document.getElementById('serverNameInput').value = '';
+            document.getElementById('serverLobbyInput').value = '';
+            document.getElementById('serverPlayerIdInput').value = '';
+            document.getElementById('serverMapInput').value = '';
+            
+            showToast('success', 'Сервер создан', 'Сервер "' + name + '" успешно добавлен');
+            fetchServers();
+            fetchSiteStats();
+        } catch (error) {
+            showToast('error', 'Ошибка', error.message);
+        }
     }
 
     async function deleteServer(serverId) {
-        if (!await isAdmin()) { showToast('error', 'Доступ запрещен', 'Только администраторы могут удалять сервера'); return; }
+        if (!await isAdmin()) {
+            showToast('error', 'Доступ запрещен', 'Только администраторы могут удалять сервера');
+            return;
+        }
         if (!confirm('Удалить этот сервер?')) return;
+
         try {
-            await apiRequest(`/servers/${serverId}`, { method: 'DELETE' });
+            const { error } = await supabase
+                .from('servers')
+                .delete()
+                .eq('id', serverId);
+
+            if (error) throw error;
             showToast('info', 'Удалено', 'Сервер удалён');
             fetchServers();
             fetchSiteStats();
-        } catch (error) { showToast('error', 'Ошибка', error.message); }
+        } catch (error) {
+            showToast('error', 'Ошибка', error.message);
+        }
     }
 
     async function fetchServers() {
         try {
-            const servers = await apiRequest('/servers');
-            renderServers(servers);
-            return servers;
+            const { data, error } = await supabase
+                .from('servers')
+                .select('*')
+                .order('createdAt', { ascending: false });
+
+            if (error) throw error;
+            renderServers(data || []);
+            return data;
         } catch (error) {
             console.error('Error fetching servers:', error);
             showToast('error', 'Ошибка', 'Не удалось загрузить сервера');
@@ -1708,15 +1957,20 @@
     async function renderServers(servers) {
         const grid = document.getElementById('serversGrid');
         if (!servers || servers.length === 0) {
-            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-secondary);"><i class="fas fa-server" style="font-size: 3rem; color: var(--primary);"></i><p style="margin-top: 1rem; font-size: 1.2rem;">Нет активных серверов</p><p>Создайте первый сервер с помощью панели администратора</p></div>`;
+            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+                <i class="fas fa-server" style="font-size: 3rem; color: var(--primary);"></i>
+                <p style="margin-top: 1rem; font-size: 1.2rem;">Нет активных серверов</p>
+                <p>Создайте первый сервер с помощью панели администратора</p>
+            </div>`;
             return;
         }
 
         const isAdminUser = await isAdmin();
         const currentUsername = getCurrentUser()?.username;
 
+        grid.innerHTML = '';
         for (const server of servers) {
-            const pending = await getServerPending(server.id);
+            const pending = server.pending || [];
             const pendingHtml = pending.length > 0
                 ? `<div class="pending-players-section visible">
                         <h4><i class="fas fa-users"></i> Очередь (${pending.length})</h4>
@@ -1761,39 +2015,111 @@
         }
     }
 
+    // ====================================================
     // ===== ОЧЕРЕДИ =====
+    // ====================================================
+
     async function getServerPending(serverId) {
         try {
-            const result = await apiRequest(`/servers/${serverId}/pending`);
-            return result;
+            const { data, error } = await supabase
+                .from('servers')
+                .select('pending')
+                .eq('id', serverId)
+                .single();
+
+            if (error) throw error;
+            return data?.pending || [];
         } catch { return []; }
     }
 
     async function addToPending(serverId, username) {
         try {
-            const result = await apiRequest(`/servers/${serverId}/pending`, {
-                method: 'POST',
-                body: JSON.stringify({ username })
-            });
-            return result;
+            const { data: server, error: serverError } = await supabase
+                .from('servers')
+                .select('pending')
+                .eq('id', serverId)
+                .single();
+
+            if (serverError || !server) {
+                throw new Error('Сервер не найден');
+            }
+
+            const pending = server.pending || [];
+            if (pending.includes(username)) {
+                throw new Error('Игрок уже в очереди');
+            }
+
+            pending.push(username);
+            const { error } = await supabase
+                .from('servers')
+                .update({ pending })
+                .eq('id', serverId);
+
+            if (error) throw error;
+            return pending;
         } catch (error) { throw error; }
     }
 
     async function removeFromPending(serverId, username) {
         try {
-            const result = await apiRequest(`/servers/${serverId}/pending/${username}`, {
-                method: 'DELETE'
-            });
-            return result;
+            const { data: server, error: serverError } = await supabase
+                .from('servers')
+                .select('pending')
+                .eq('id', serverId)
+                .single();
+
+            if (serverError || !server) {
+                throw new Error('Сервер не найден');
+            }
+
+            const pending = (server.pending || []).filter(p => p !== username);
+            const { error } = await supabase
+                .from('servers')
+                .update({ pending })
+                .eq('id', serverId);
+
+            if (error) throw error;
+            return pending;
         } catch (error) { throw error; }
     }
 
     async function creditPlayer(serverId, username) {
         try {
-            const result = await apiRequest(`/servers/${serverId}/credit/${username}`, {
-                method: 'POST'
-            });
-            return result;
+            // Удаляем из очереди
+            const { data: server, error: serverError } = await supabase
+                .from('servers')
+                .select('pending')
+                .eq('id', serverId)
+                .single();
+
+            if (serverError || !server) {
+                throw new Error('Сервер не найден');
+            }
+
+            const pending = (server.pending || []).filter(p => p !== username);
+            await supabase
+                .from('servers')
+                .update({ pending })
+                .eq('id', serverId);
+
+            // Увеличиваем serverMatches у пользователя
+            const { data: user, error: userError } = await supabase
+                .from('users')
+                .select('serverMatches')
+                .eq('username', username)
+                .single();
+
+            if (userError) {
+                throw new Error('Пользователь не найден');
+            }
+
+            const newMatches = (user?.serverMatches || 0) + 1;
+            await supabase
+                .from('users')
+                .update({ serverMatches: newMatches })
+                .eq('username', username);
+
+            return pending;
         } catch (error) { throw error; }
     }
 
@@ -1803,8 +2129,8 @@
             try {
                 await addToPending(serverId, username);
                 showToast('success', 'Вы в очереди!', 'Ваш никнейм добавлен под сервером');
-                await fetchServers();
-                await fetchSiteStats();
+                fetchServers();
+                fetchSiteStats();
             } catch (error) {
                 if (error.message.includes('уже в очереди')) {
                     showToast('info', 'Уже в очереди', 'Вы уже в очереди на этом сервере');
@@ -1818,88 +2144,151 @@
     }
 
     async function creditAndRefresh(serverId, username) {
-        if (!await isAdmin()) { showToast('error', 'Доступ запрещен', 'Только администраторы могут зачислять игроков'); return; }
+        if (!await isAdmin()) {
+            showToast('error', 'Доступ запрещен', 'Только администраторы могут зачислять игроков');
+            return;
+        }
         try {
             await creditPlayer(serverId, username);
             showToast('success', 'Зачислено', `Игроку ${username} зачислена игра`);
-            await fetchServers();
-            await fetchSiteStats();
-            await fetchTopPlayers();
+            fetchServers();
+            fetchSiteStats();
+            fetchTopPlayers();
         } catch (error) {
             showToast('error', 'Ошибка', error.message);
         }
     }
 
     async function cancelAndRefresh(serverId, username) {
-        if (!await isAdmin()) { showToast('error', 'Доступ запрещен', 'Только администраторы могут отменять игроков'); return; }
+        if (!await isAdmin()) {
+            showToast('error', 'Доступ запрещен', 'Только администраторы могут отменять игроков');
+            return;
+        }
         try {
             await removeFromPending(serverId, username);
             showToast('info', 'Отменено', `Игрок ${username} удалён из очереди`);
-            await fetchServers();
-            await fetchSiteStats();
+            fetchServers();
+            fetchSiteStats();
         } catch (error) {
             showToast('error', 'Ошибка', error.message);
         }
     }
 
+    // ====================================================
     // ===== ПОИСК 5v5 =====
+    // ====================================================
+
+    let searchInterval = null;
+    let playerInSearch = false;
+
     async function getSearchPlayers() {
         try {
-            const players = await apiRequest('/search-players');
-            return players;
+            const { data, error } = await supabase
+                .from('search_players')
+                .select('username')
+                .order('addedAt', { ascending: true });
+
+            if (error) throw error;
+            return data.map(p => p.username) || [];
         } catch { return []; }
     }
 
     async function addToSearch(username) {
         try {
-            const result = await apiRequest('/search-players', {
-                method: 'POST',
-                body: JSON.stringify({ username })
-            });
-            return result;
+            const { data, error } = await supabase
+                .from('search_players')
+                .insert([{ username }])
+                .select();
+
+            if (error) {
+                if (error.code === '23505') {
+                    throw new Error('Уже в поиске');
+                }
+                throw error;
+            }
+            return data.map(p => p.username);
         } catch (error) { throw error; }
     }
 
     async function removeFromSearch(username) {
         try {
-            const result = await apiRequest('/search-players', {
-                method: 'DELETE',
-                body: JSON.stringify({ username })
-            });
-            return result;
+            const { error } = await supabase
+                .from('search_players')
+                .delete()
+                .eq('username', username);
+
+            if (error) throw error;
         } catch (error) { throw error; }
     }
 
-    async function createMatchOnServer(players) {
+    async function createMatch(players) {
         try {
-            const result = await apiRequest('/matches', {
-                method: 'POST',
-                body: JSON.stringify({ players })
-            });
-            return result;
+            const matchId = 'match_' + Date.now();
+            const shuffled = [...players].sort(() => Math.random() - 0.5);
+            const half = Math.ceil(shuffled.length / 2);
+            const terrorist = shuffled.slice(0, half).map(p => ({ username: p, captain: false }));
+            const counter = shuffled.slice(half).map(p => ({ username: p, captain: false }));
+            
+            if (terrorist.length > 0) terrorist[0].captain = true;
+            if (counter.length > 0) counter[0].captain = true;
+
+            const newMatch = {
+                id: matchId,
+                terrorist: terrorist,
+                counter: counter,
+                bans: [],
+                selectedMap: null,
+                link: null,
+                resultImage: null,
+                status: 'ban_phase',
+                currentBanTurn: 'terrorist',
+                createdAt: new Date().toISOString(),
+                createdBy: getCurrentUser()?.username || 'system'
+            };
+
+            const { data, error } = await supabase
+                .from('matches')
+                .insert([newMatch])
+                .select();
+
+            if (error) throw error;
+            return data[0];
         } catch (error) { throw error; }
     }
 
-    async function getMatchFromServer(matchId) {
+    async function getMatch(matchId) {
         try {
-            const result = await apiRequest(`/matches/${matchId}`);
-            return result;
+            const { data, error } = await supabase
+                .from('matches')
+                .select('*')
+                .eq('id', matchId)
+                .single();
+
+            if (error) throw error;
+            return data;
         } catch { return null; }
     }
 
-    async function updateMatchOnServer(matchId, data) {
+    async function updateMatch(matchId, updates) {
         try {
-            const result = await apiRequest(`/matches/${matchId}`, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            });
-            return result;
+            const { data, error } = await supabase
+                .from('matches')
+                .update(updates)
+                .eq('id', matchId)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
         } catch (error) { throw error; }
     }
 
     async function toggleSearch() {
         const user = getCurrentUser();
-        if (!user) { showToast('error', 'Ошибка', 'Вы не авторизованы'); return; }
+        if (!user) {
+            showToast('error', 'Ошибка', 'Вы не авторизованы');
+            return;
+        }
 
         try {
             const players = await getSearchPlayers();
@@ -1951,16 +2340,16 @@
                 for (const p of matchPlayers) {
                     await removeFromSearch(p);
                 }
-                const result = await createMatchOnServer(matchPlayers);
-                if (result.success) {
-                    setCurrentMatchId(result.match.id);
+                const match = await createMatch(matchPlayers);
+                if (match) {
+                    setCurrentMatchId(match.id);
                     if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
                     playerInSearch = false;
                     document.getElementById('searchBtn').innerHTML = '<i class="fas fa-search"></i> Найти игру';
                     document.getElementById('searchBtn').classList.remove('cancel');
                     showToast('success', 'Матч найден!', '10 игроков собрано. Переход на страницу матча...');
                     setTimeout(() => {
-                        showMatchPage(result.match.id);
+                        showMatchPage(match.id);
                     }, 1500);
                 }
             }
@@ -1993,10 +2382,33 @@
         document.getElementById('pendingCount').textContent = count;
     }
 
+    // ====================================================
     // ===== МАТЧ 5v5 =====
+    // ====================================================
+
+    let matchData = null;
+    let currentMatchId = null;
+
+    function getCurrentMatchId() {
+        return localStorage.getItem('currentMatchId') || null;
+    }
+
+    function setCurrentMatchId(matchId) {
+        localStorage.setItem('currentMatchId', matchId);
+        currentMatchId = matchId;
+    }
+
+    function clearCurrentMatchId() {
+        localStorage.removeItem('currentMatchId');
+        currentMatchId = null;
+    }
+
     async function showMatchPage(matchId) {
-        const match = await getMatchFromServer(matchId);
-        if (!match) { showToast('error', 'Ошибка', 'Матч не найден'); return; }
+        const match = await getMatch(matchId);
+        if (!match) {
+            showToast('error', 'Ошибка', 'Матч не найден');
+            return;
+        }
 
         matchData = match;
         setCurrentMatchId(matchId);
@@ -2127,9 +2539,18 @@
         const isCaptain = match.terrorist.some(p => p.username === user?.username && p.captain) ||
                          match.counter.some(p => p.username === user?.username && p.captain);
         
-        if (!isCaptain) { showToast('error', 'Доступ запрещен', 'Только капитан может банить карты'); return; }
-        if (match.bans.includes(map)) { showToast('info', 'Уже забанено', 'Эта карта уже забанена'); return; }
-        if (match.selectedMap) { showToast('info', 'Карта выбрана', 'Карта уже выбрана'); return; }
+        if (!isCaptain) {
+            showToast('error', 'Доступ запрещен', 'Только капитан может банить карты');
+            return;
+        }
+        if (match.bans.includes(map)) {
+            showToast('info', 'Уже забанено', 'Эта карта уже забанена');
+            return;
+        }
+        if (match.selectedMap) {
+            showToast('info', 'Карта выбрана', 'Карта уже выбрана');
+            return;
+        }
 
         match.bans.push(map);
         const availableMaps = MAPS.filter(m => !match.bans.includes(m));
@@ -2149,7 +2570,7 @@
         }
 
         try {
-            await updateMatchOnServer(match.id, {
+            await updateMatch(match.id, {
                 bans: match.bans,
                 selectedMap: match.selectedMap,
                 status: match.status,
@@ -2183,13 +2604,16 @@
         const match = matchData;
         const isCaptain = match.terrorist.some(p => p.username === user?.username && p.captain) ||
                          match.counter.some(p => p.username === user?.username && p.captain);
-        if (!isCaptain) { showToast('error', 'Доступ запрещен', 'Только капитан может прикрепить ссылку'); return; }
+        if (!isCaptain) {
+            showToast('error', 'Доступ запрещен', 'Только капитан может прикрепить ссылку');
+            return;
+        }
 
         const link = prompt('Введите ссылку на лобби матча:');
         if (!link) return;
 
         try {
-            await updateMatchOnServer(match.id, { link });
+            await updateMatch(match.id, { link });
             match.link = link;
             renderMatch(match);
             showToast('success', 'Ссылка прикреплена!', 'Все игроки видят ссылку');
@@ -2204,13 +2628,16 @@
         const match = matchData;
         const isCaptain = match.terrorist.some(p => p.username === user?.username && p.captain) ||
                          match.counter.some(p => p.username === user?.username && p.captain);
-        if (!isCaptain) { showToast('error', 'Доступ запрещен', 'Только капитан может прикрепить результат'); return; }
+        if (!isCaptain) {
+            showToast('error', 'Доступ запрещен', 'Только капитан может прикрепить результат');
+            return;
+        }
 
         const imageUrl = prompt('Введите URL изображения с результатом матча:');
         if (!imageUrl) return;
 
         try {
-            await updateMatchOnServer(match.id, { resultImage: imageUrl, status: 'finished' });
+            await updateMatch(match.id, { resultImage: imageUrl, status: 'finished' });
             match.resultImage = imageUrl;
             match.status = 'finished';
             renderMatch(match);
@@ -2232,34 +2659,66 @@
         showPage('mainContent');
     }
 
+    // ====================================================
     // ===== СТАТИСТИКА =====
+    // ====================================================
+
     async function fetchSiteStats() {
         try {
-            const stats = await apiRequest('/stats');
-            document.getElementById('usersCount').textContent = stats.totalUsers || 0;
-            document.getElementById('serverCount').textContent = stats.servers || 0;
-            document.getElementById('tournamentsCount').textContent = stats.tournaments || 0;
+            const { count: totalUsers, error: usersError } = await supabase
+                .from('users')
+                .select('*', { count: 'exact', head: true });
+
+            if (usersError) throw usersError;
+
+            const { count: serversCount, error: serversError } = await supabase
+                .from('servers')
+                .select('*', { count: 'exact', head: true });
+
+            if (serversError) throw serversError;
+
             const searchPlayers = await getSearchPlayers();
+
+            document.getElementById('usersCount').textContent = totalUsers || 0;
+            document.getElementById('serverCount').textContent = serversCount || 0;
             document.getElementById('pendingCount').textContent = searchPlayers.length;
-            return stats;
-        } catch (error) { console.error('Error fetching stats:', error); }
+            
+            return { totalUsers, serversCount, searchCount: searchPlayers.length };
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+        }
     }
 
+    // ====================================================
     // ===== ТОП ИГРОКОВ =====
+    // ====================================================
+
     async function fetchTopPlayers() {
         try {
-            const players = await apiRequest('/top-players');
-            renderTopPlayers(players);
-            return players;
-        } catch (error) { console.error('Error fetching top players:', error); }
+            const { data, error } = await supabase
+                .from('users')
+                .select('username, standoffId, kills, matches, serverMatches, deaths')
+                .order('serverMatches', { ascending: false })
+                .limit(10);
+
+            if (error) throw error;
+            renderTopPlayers(data || []);
+            return data;
+        } catch (error) {
+            console.error('Error fetching top players:', error);
+        }
     }
 
     function renderTopPlayers(players) {
         const container = document.getElementById('topPlayersList');
         if (!players || players.length === 0) {
-            container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-users" style="font-size: 3rem; color: var(--primary);"></i><p style="margin-top: 1rem;">Нет данных об игроках</p></div>`;
+            container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                <i class="fas fa-users" style="font-size: 3rem; color: var(--primary);"></i>
+                <p style="margin-top: 1rem;">Нет данных об игроках</p>
+            </div>`;
             return;
         }
+
         const medals = ['🥇', '🥈', '🥉', '4', '5', '6', '7', '8', '9', '10'];
         const classes = ['gold', 'silver', 'bronze', '', '', '', '', '', '', ''];
         container.innerHTML = players.map((player, index) => `
@@ -2275,13 +2734,33 @@
         `).join('');
     }
 
+    // ====================================================
     // ===== ПРОФИЛЬ =====
+    // ====================================================
+
     async function fetchUserData() {
-        try {
-            const user = await apiRequest('/auth/me');
-            if (user) { setCurrentUser(user); updateProfileData(user); }
+        const user = getCurrentUser();
+        if (user) {
+            // Получаем актуальные данные из Supabase
+            try {
+                const { data, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+
+                if (!error && data) {
+                    setCurrentUser(data);
+                    updateProfileData(data);
+                    return data;
+                }
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+            }
+            updateProfileData(user);
             return user;
-        } catch (error) { console.error('Error fetching user data:', error); }
+        }
+        return null;
     }
 
     function updateProfileData(user) {
@@ -2329,47 +2808,20 @@
         });
     }
 
-    // ===== УПРАВЛЕНИЕ СТРАНИЦАМИ =====
-    function showPage(pageId) {
-        if (document.getElementById('matchPageActive').classList.contains('active') && pageId !== 'matchPage') {
-            if (!confirm('Вы покидаете страницу матча. Продолжить?')) return;
-            clearCurrentMatchId();
-            matchData = null;
-            document.getElementById('matchPageActive').classList.remove('active');
-        }
-
-        document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-        if (pageId === 'mainContent') {
-            document.getElementById('mainContent').classList.remove('hidden');
-            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-            document.getElementById('footer').classList.remove('hidden');
-            document.getElementById('matchPageActive').classList.remove('active');
-        } else if (pageId === 'matchPage') {
-            document.getElementById('mainContent').classList.add('hidden');
-            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-            document.getElementById('matchPage').classList.add('active');
-            document.getElementById('footer').classList.add('hidden');
-            updateSearchUI();
-            const matchId = getCurrentMatchId();
-            if (matchId) {
-                getMatchFromServer(matchId).then(match => {
-                    if (match) {
-                        showMatchPage(matchId);
-                    } else {
-                        clearCurrentMatchId();
-                    }
-                });
-            }
-        } else {
-            document.getElementById('mainContent').classList.add('hidden');
-            document.getElementById(pageId).classList.add('active');
-            document.getElementById('footer').classList.add('hidden');
-            document.getElementById('matchPageActive').classList.remove('active');
-        }
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
+    // ====================================================
     // ===== НАСТРОЙКИ =====
+    // ====================================================
+
+    const translations = {
+        ru: { main: 'Главная', profile: 'Мой профиль', top: 'Топ игроков', shop: 'Каталог товаров', settings: 'Настройки', logout: 'Выйти', connect: 'Подключиться', servers: 'DM Сервера', users: 'Зарегистрировано', tournaments: 'Проведено турниров', servers_count: 'DM серверов', pending: 'В очереди', work: 'Работаем', back: 'На главную', join: 'Подключиться' },
+        en: { main: 'Home', profile: 'My Profile', top: 'Top Players', shop: 'Shop', settings: 'Settings', logout: 'Logout', connect: 'Connect', servers: 'DM Servers', users: 'Registered', tournaments: 'Tournaments Held', servers_count: 'DM Servers', pending: 'Pending', work: '24/7', back: 'Back to Home', join: 'Join' },
+        kz: { main: 'Басты бет', profile: 'Менің профилім', top: 'Үздік ойыншылар', shop: 'Тауарлар', settings: 'Баптаулар', logout: 'Шығу', connect: 'Қосылу', servers: 'DM Серверлер', users: 'Тіркелген', tournaments: 'Турнирлер', servers_count: 'DM серверлер', pending: 'Кезекте', work: '24/7', back: 'Басты бетке', join: 'Қосылу' }
+    };
+
+    let currentLanguage = 'ru';
+    let currentUser = null;
+    let kdChartInstance = null;
+
     function changeTheme(theme) {
         document.body.setAttribute('data-theme', theme);
         localStorage.setItem('startup_theme', theme);
@@ -2414,6 +2866,49 @@
         showToast('success', 'Настройки сохранены', 'Тема и язык успешно обновлены');
     }
 
+    // ====================================================
+    // ===== УПРАВЛЕНИЕ СТРАНИЦАМИ =====
+    // ====================================================
+
+    function showPage(pageId) {
+        if (document.getElementById('matchPageActive').classList.contains('active') && pageId !== 'matchPage') {
+            if (!confirm('Вы покидаете страницу матча. Продолжить?')) return;
+            clearCurrentMatchId();
+            matchData = null;
+            document.getElementById('matchPageActive').classList.remove('active');
+        }
+
+        document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+        if (pageId === 'mainContent') {
+            document.getElementById('mainContent').classList.remove('hidden');
+            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+            document.getElementById('footer').classList.remove('hidden');
+            document.getElementById('matchPageActive').classList.remove('active');
+        } else if (pageId === 'matchPage') {
+            document.getElementById('mainContent').classList.add('hidden');
+            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+            document.getElementById('matchPage').classList.add('active');
+            document.getElementById('footer').classList.add('hidden');
+            updateSearchUI();
+            const matchId = getCurrentMatchId();
+            if (matchId) {
+                getMatch(matchId).then(match => {
+                    if (match) {
+                        showMatchPage(matchId);
+                    } else {
+                        clearCurrentMatchId();
+                    }
+                });
+            }
+        } else {
+            document.getElementById('mainContent').classList.add('hidden');
+            document.getElementById(pageId).classList.add('active');
+            document.getElementById('footer').classList.add('hidden');
+            document.getElementById('matchPageActive').classList.remove('active');
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     function showToast(type, title, text) {
         const toast = document.getElementById('toast');
         const titleEl = document.getElementById('toastTitle');
@@ -2436,32 +2931,53 @@
     function toggleCatalog() {
         document.getElementById('catalogDropdown').classList.toggle('active');
     }
+
     document.addEventListener('click', function(e) {
         const dropdown = document.getElementById('catalogDropdown');
         if (!dropdown.contains(e.target)) dropdown.classList.remove('active');
     });
 
+    // ====================================================
+    // ===== ОБНОВЛЕНИЕ АДМИН-ПАНЕЛИ =====
+    // ====================================================
+
+    async function updateAdminPanel() {
+        const adminPanel = document.getElementById('adminPanel');
+        const adminSystem = document.getElementById('adminSystem');
+        const userIsAdmin = await isAdmin();
+        const userIsSuper = isSuperAdmin();
+        if (userIsAdmin) adminPanel.classList.add('visible'); else adminPanel.classList.remove('visible');
+        if (userIsSuper) adminSystem.classList.add('visible'); else adminSystem.classList.remove('visible');
+    }
+
+    // ====================================================
     // ===== ПРОВЕРКА АВТОРИЗАЦИИ =====
+    // ====================================================
+
     async function checkAuth() {
         const token = localStorage.getItem('startup_token');
         const user = getCurrentUser();
+        
         if (token && user) {
             document.getElementById('authPage').style.display = 'none';
             document.getElementById('mainSite').classList.add('visible');
             document.getElementById('header').classList.add('visible');
-            updateProfileData(user);
+            
+            // Загружаем данные из Supabase
+            await fetchUserData();
             loadSettings();
+            
             if (isSuperAdmin()) console.log('👑 Супер-админ авторизован:', user.email);
+            
             await fetchServers();
             await fetchSiteStats();
             await renderAdmins();
             await updateAdminPanel();
             await fetchTopPlayers();
-            await fetchUserData();
             
             const matchId = getCurrentMatchId();
             if (matchId) {
-                const match = await getMatchFromServer(matchId);
+                const match = await getMatch(matchId);
                 if (match) {
                     setTimeout(() => showMatchPage(matchId), 1000);
                 } else {
@@ -2480,18 +2996,13 @@
         }
     }
 
-    async function updateAdminPanel() {
-        const adminPanel = document.getElementById('adminPanel');
-        const adminSystem = document.getElementById('adminSystem');
-        const userIsAdmin = await isAdmin();
-        const userIsSuper = isSuperAdmin();
-        if (userIsAdmin) adminPanel.classList.add('visible'); else adminPanel.classList.remove('visible');
-        if (userIsSuper) adminSystem.classList.add('visible'); else adminSystem.classList.remove('visible');
-    }
-
+    // ====================================================
     // ===== ЗАПУСК =====
+    // ====================================================
+
     checkAuth();
     setInterval(fetchSiteStats, 30000);
+    setInterval(checkSearch, 5000);
 
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
@@ -2503,7 +3014,7 @@
     });
 
     console.log('🚀 Nwole\'s DM Mini App loaded!');
-    console.log('📡 API_URL:', API_URL);
+    console.log('📡 Connected to Supabase');
     console.log('👑 Супер-админ:', SUPER_ADMIN_EMAIL);
     console.log('👤 Current user:', getCurrentUser());
 </script>
