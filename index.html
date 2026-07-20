@@ -1,15 +1,10 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReSota — Беседы в Telegram</title>
-    <!-- Google Fonts для современного стиля -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRAVN — Киберспортивная команда</title>
     <style>
-        /* ----- Базовые сбросы ----- */
         * {
             margin: 0;
             padding: 0;
@@ -17,471 +12,444 @@
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            min-height: 100vh;
+            background: #0b0b12;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            color: #f0f4ff;
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
-            background: radial-gradient(ellipse at 20% 30%, #0b1120, #030712);
-            overflow-x: hidden;
-            padding: 2rem 1rem;
-            position: relative;
+            padding: 20px;
+            min-height: 100vh;
         }
 
-        /* ----- Анимированный фон (CSS-изображения) ----- */
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            background:
-                /* большие декоративные окружности */
-                radial-gradient(circle at 10% 90%, rgba(0, 200, 255, 0.08) 0%, transparent 50%),
-                radial-gradient(circle at 90% 10%, rgba(120, 80, 255, 0.10) 0%, transparent 50%),
-                radial-gradient(circle at 50% 50%, rgba(0, 255, 200, 0.04) 0%, transparent 70%);
-            animation: breathe 12s ease-in-out infinite alternate;
-        }
-
-        @keyframes breathe {
-            0%   { transform: scale(1) rotate(0deg); opacity: 0.7; }
-            100% { transform: scale(1.1) rotate(3deg); opacity: 1; }
-        }
-
-        /* Плавающие геометрические фигуры (CSS-изображения) */
-        .shape {
-            position: fixed;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.02);
-            backdrop-filter: blur(1px);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            pointer-events: none;
-            z-index: 0;
-            animation: float 20s infinite alternate ease-in-out;
-        }
-        .shape--1 {
-            width: 300px;
-            height: 300px;
-            top: -50px;
-            right: -50px;
-            background: radial-gradient(circle at 30% 30%, rgba(0, 180, 255, 0.06), transparent 70%);
-            animation-duration: 25s;
-        }
-        .shape--2 {
-            width: 500px;
-            height: 500px;
-            bottom: -150px;
-            left: -150px;
-            background: radial-gradient(circle at 70% 70%, rgba(180, 0, 255, 0.06), transparent 70%);
-            animation-duration: 30s;
-            animation-delay: -5s;
-        }
-        .shape--3 {
-            width: 200px;
-            height: 200px;
-            top: 40%;
-            left: 10%;
-            background: radial-gradient(circle at 50% 50%, rgba(0, 255, 200, 0.05), transparent 70%);
-            animation-duration: 18s;
-            animation-delay: -10s;
-        }
-        .shape--4 {
-            width: 150px;
-            height: 150px;
-            bottom: 20%;
-            right: 15%;
-            background: radial-gradient(circle at 50% 50%, rgba(255, 200, 0, 0.05), transparent 70%);
-            animation-duration: 22s;
-            animation-delay: -3s;
-        }
-
-        @keyframes float {
-            0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
-            100% { transform: translate(40px, -30px) scale(1.2) rotate(8deg); }
-        }
-
-        /* ----- Основной контейнер (3D-перспектива) ----- */
         .container {
-            position: relative;
-            z-index: 1;
             max-width: 1200px;
             width: 100%;
-            perspective: 1200px;
+            background: radial-gradient(ellipse at 20% 30%, #111827, #07080e);
+            border-radius: 40px;
+            padding: 30px 40px 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+            position: relative;
+            overflow: hidden;
         }
 
-        /* ----- Шапка с 3D-эффектом ----- */
+        /* Лёгкий неоновый отблеск */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -30%;
+            left: -10%;
+            width: 60%;
+            height: 80%;
+            background: radial-gradient(circle, rgba(0, 230, 255, 0.04) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        /* ШАПКА */
         .header {
             display: flex;
-            flex-wrap: wrap;
-            align-items: center;
             justify-content: space-between;
-            padding: 1.5rem 2rem;
-            margin-bottom: 3rem;
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(12px);
-            border-radius: 2rem;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-            transform: rotateX(2deg) rotateY(-1deg) translateZ(10px);
-            transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.1);
-        }
-        .header:hover {
-            transform: rotateX(0deg) rotateY(0deg) translateZ(20px);
-            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(0, 230, 255, 0.15);
+            flex-wrap: wrap;
+            gap: 15px;
+            position: relative;
+            z-index: 2;
         }
 
         .logo {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 2rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            background: linear-gradient(135deg, #a78bfa, #60a5fa, #34d399);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-shadow: 0 0 40px rgba(167, 139, 250, 0.2);
+            font-size: 32px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            color: #fff;
+            text-shadow: 0 0 12px rgba(0, 230, 255, 0.3);
         }
-        .logo-icon {
-            display: inline-block;
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, #a78bfa, #60a5fa);
-            border-radius: 14px;
-            transform: rotate(12deg) skewX(-4deg);
-            box-shadow: 0 8px 20px rgba(96, 165, 250, 0.3);
-            position: relative;
-        }
-        .logo-icon::after {
-            content: '⟠';
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            color: white;
-            transform: rotate(-12deg) skewX(4deg);
+        .logo span {
+            color: #00e6ff;
         }
 
         .nav {
             display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-        .nav a {
-            color: rgba(255, 255, 255, 0.7);
-            text-decoration: none;
-            padding: 0.6rem 1.2rem;
-            border-radius: 3rem;
-            font-weight: 600;
-            font-size: 0.95rem;
-            transition: all 0.25s ease;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(4px);
-        }
-        .nav a:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: #fff;
-            transform: translateY(-2px) scale(1.02);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
-            border-color: rgba(167, 139, 250, 0.3);
-        }
-
-        /* ----- Секция героя с 3D-текстом ----- */
-        .hero {
-            text-align: center;
-            margin-bottom: 4rem;
-            transform: translateZ(30px);
-        }
-        .hero h1 {
-            font-size: clamp(2.8rem, 8vw, 5rem);
-            font-weight: 800;
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-            background: linear-gradient(to right, #f0f0ff, #c4b5fd, #93c5fd, #6ee7b7);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-shadow: 0 0 60px rgba(167, 139, 250, 0.15);
-            transform: rotateX(4deg) rotateY(-2deg);
-        }
-        .hero p {
-            margin-top: 1rem;
-            font-size: 1.25rem;
-            color: rgba(255, 255, 255, 0.6);
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-            backdrop-filter: blur(4px);
-            padding: 0.5rem 1.5rem;
-            border-radius: 2rem;
-            background: rgba(0, 0, 0, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.03);
-        }
-
-        /* ----- Сетка карточек (3D-эффект при наведении) ----- */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 2rem;
-            margin-top: 1rem;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(16px);
-            border-radius: 2rem;
-            padding: 2rem 1.8rem;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
-            transition: all 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-            transform-style: preserve-3d;
-            transform: perspective(800px) rotateX(2deg) rotateY(0deg) translateZ(0);
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .card:hover {
-            transform: perspective(800px) rotateX(0deg) rotateY(6deg) translateZ(25px);
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(167, 139, 250, 0.2);
-            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-        }
-
-        /* Разные углы поворота для каждой карточки (эффект 3D-карусели) */
-        .card:nth-child(1) { transform: perspective(800px) rotateX(2deg) rotateY(-3deg) translateZ(0); }
-        .card:nth-child(2) { transform: perspective(800px) rotateX(2deg) rotateY(2deg) translateZ(0); }
-        .card:nth-child(3) { transform: perspective(800px) rotateX(2deg) rotateY(-1deg) translateZ(0); }
-        .card:nth-child(4) { transform: perspective(800px) rotateX(2deg) rotateY(4deg) translateZ(0); }
-
-        .card:nth-child(1):hover { transform: perspective(800px) rotateX(0deg) rotateY(-8deg) translateZ(30px); }
-        .card:nth-child(2):hover { transform: perspective(800px) rotateX(0deg) rotateY(8deg) translateZ(30px); }
-        .card:nth-child(3):hover { transform: perspective(800px) rotateX(0deg) rotateY(-4deg) translateZ(30px); }
-        .card:nth-child(4):hover { transform: perspective(800px) rotateX(0deg) rotateY(10deg) translateZ(30px); }
-
-        .card-icon {
-            font-size: 2.6rem;
-            margin-bottom: 1.2rem;
-            display: inline-block;
-            background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(96, 165, 250, 0.2));
-            padding: 0.8rem;
-            border-radius: 1.2rem;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-            transform: translateZ(15px);
-        }
-
-        .card h3 {
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: #fff;
-            margin-bottom: 0.5rem;
-            letter-spacing: -0.01em;
-            transform: translateZ(10px);
-        }
-        .card p {
-            color: rgba(255, 255, 255, 0.6);
-            line-height: 1.5;
-            font-size: 0.95rem;
-            flex: 1;
-            transform: translateZ(5px);
-        }
-        .card .tag {
-            margin-top: 1.2rem;
-            display: inline-block;
-            padding: 0.3rem 1rem;
-            border-radius: 2rem;
-            font-size: 0.75rem;
+            gap: 28px;
+            font-size: 15px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
-            background: rgba(167, 139, 250, 0.15);
-            color: #a78bfa;
-            border: 1px solid rgba(167, 139, 250, 0.1);
-            transform: translateZ(8px);
+            letter-spacing: 0.5px;
+        }
+        .nav a {
+            color: #b0c7e7;
+            text-decoration: none;
+            transition: 0.3s;
+        }
+        .nav a:hover {
+            color: #00e6ff;
+            text-shadow: 0 0 10px rgba(0, 230, 255, 0.3);
         }
 
-        /* ----- Футер с 3D-тенью ----- */
-        .footer {
-            margin-top: 4rem;
-            padding: 1.5rem 2rem;
+        /* Блок PROFESSIONAL + CRAVN */
+        .hero {
+            margin: 35px 0 30px;
             text-align: center;
-            color: rgba(255, 255, 255, 0.3);
-            font-size: 0.9rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(8px);
-            border-radius: 2rem;
-            background: rgba(0, 0, 0, 0.1);
-            transform: perspective(800px) rotateX(2deg) translateZ(0);
-            transition: transform 0.3s ease;
+            position: relative;
+            z-index: 2;
         }
-        .footer:hover {
-            transform: perspective(800px) rotateX(0deg) translateZ(15px);
+        .hero-sub {
+            font-size: 18px;
+            font-weight: 400;
+            letter-spacing: 5px;
+            color: #8aa3c9;
+            text-transform: uppercase;
         }
-        .footer span {
-            background: linear-gradient(135deg, #a78bfa, #60a5fa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 600;
+        .hero-title {
+            font-size: 80px;
+            font-weight: 900;
+            letter-spacing: 8px;
+            color: #fff;
+            margin-top: 4px;
+            text-shadow: 0 0 30px rgba(0, 230, 255, 0.15);
+        }
+        .hero-title span {
+            color: #00e6ff;
         }
 
-        /* ----- Адаптивность ----- */
-        @media (max-width: 700px) {
-            .header {
-                flex-direction: column;
-                gap: 1rem;
-                align-items: stretch;
-                text-align: center;
+        /* О НАС + статистика */
+        .about {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(4px);
+            border-radius: 30px;
+            padding: 20px 35px;
+            margin: 30px 0 35px;
+            border: 1px solid rgba(0, 230, 255, 0.08);
+            flex-wrap: wrap;
+            gap: 20px;
+            position: relative;
+            z-index: 2;
+        }
+        .about-title {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: #fff;
+        }
+        .about-title span {
+            color: #00e6ff;
+        }
+
+        .stats {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 34px;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1;
+        }
+        .stat-number.green {
+            color: #00e6ff;
+        }
+        .stat-label {
+            font-size: 13px;
+            text-transform: uppercase;
+            color: #8899bb;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+
+        /* СОСТАВ */
+        .roster-title {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        .roster-title span {
+            color: #00e6ff;
+        }
+
+        .roster-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin: 20px 0 40px;
+        }
+
+        .player-card {
+            background: rgba(18, 28, 46, 0.7);
+            backdrop-filter: blur(6px);
+            border-radius: 20px;
+            padding: 18px 10px 16px;
+            text-align: center;
+            border: 1px solid rgba(0, 230, 255, 0.12);
+            transition: 0.3s;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+        .player-card:hover {
+            border-color: #00e6ff;
+            box-shadow: 0 0 30px rgba(0, 230, 255, 0.05);
+        }
+
+        .player-name {
+            font-size: 19px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .player-role {
+            font-size: 13px;
+            color: #7a93bb;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        .player-kd {
+            font-size: 28px;
+            font-weight: 800;
+            color: #00e6ff;
+            text-shadow: 0 0 20px rgba(0, 230, 255, 0.2);
+        }
+        .player-kd-label {
+            font-size: 12px;
+            color: #6a7fa0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* СОЦСЕТИ */
+        .socials {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(0, 230, 255, 0.08);
+            margin-top: 10px;
+            position: relative;
+            z-index: 2;
+        }
+        .socials-label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+        .socials-label span {
+            color: #00e6ff;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+        .social-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #b0c7e7;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: 0.3s;
+        }
+        .social-link:hover {
+            color: #00e6ff;
+            text-shadow: 0 0 12px rgba(0, 230, 255, 0.2);
+        }
+        .social-link .icon {
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        /* Адаптив */
+        @media (max-width: 900px) {
+            .container {
+                padding: 20px;
             }
             .nav {
-                justify-content: center;
+                gap: 14px;
+                font-size: 13px;
+                flex-wrap: wrap;
             }
-            .hero h1 {
-                font-size: 2.4rem;
+            .hero-title {
+                font-size: 52px;
+                letter-spacing: 4px;
             }
-            .card {
-                padding: 1.6rem;
+            .roster-grid {
+                grid-template-columns: repeat(3, 1fr);
             }
-            .card:nth-child(1),
-            .card:nth-child(2),
-            .card:nth-child(3),
-            .card:nth-child(4) {
-                transform: perspective(800px) rotateX(1deg) rotateY(0deg) translateZ(0);
+            .stats {
+                gap: 20px;
             }
-            .card:nth-child(1):hover,
-            .card:nth-child(2):hover,
-            .card:nth-child(3):hover,
-            .card:nth-child(4):hover {
-                transform: perspective(800px) rotateX(0deg) rotateY(2deg) translateZ(20px);
+            .about {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
 
-        /* Стиль для скролла */
-        ::-webkit-scrollbar {
-            width: 6px;
-            background: transparent;
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .nav {
+                gap: 12px;
+                font-size: 12px;
+            }
+            .hero-title {
+                font-size: 38px;
+                letter-spacing: 2px;
+            }
+            .hero-sub {
+                font-size: 14px;
+                letter-spacing: 3px;
+            }
+            .roster-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .social-links {
+                gap: 20px;
+            }
+            .stat-number {
+                font-size: 28px;
+            }
         }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(167, 139, 250, 0.3);
-            border-radius: 10px;
+
+        @media (max-width: 420px) {
+            .roster-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .player-name {
+                font-size: 16px;
+            }
+            .player-kd {
+                font-size: 22px;
+            }
         }
     </style>
 </head>
 <body>
-
-    <!-- Декоративные фигуры (CSS-изображения) -->
-    <div class="shape shape--1"></div>
-    <div class="shape shape--2"></div>
-    <div class="shape shape--3"></div>
-    <div class="shape shape--4"></div>
-
     <div class="container">
+
         <!-- ШАПКА -->
         <header class="header">
-            <div class="logo">
-                <span class="logo-icon"></span>
-                ReSota
-            </div>
+            <div class="logo">CRAVN</div>
             <nav class="nav">
-                <a href="#">Главная</a>
-                <a href="#">Каналы</a>
-                <a href="#">Кланы</a>
-                <a href="#">Тимейты</a>
-                <a href="#">Контакты</a>
+                <a href="#">ГЛАВНАЯ</a>
+                <a href="#">СОСТАВ</a>
+                <a href="#">СТАТИСТИКА</a>
+                <a href="#">ДОСТИЖЕНИЯ</a>
+                <a href="#">НОВОСТИ</a>
+                <a href="#">КОНТАКТЫ</a>
             </nav>
         </header>
 
-        <!-- ГЕРОЙ -->
-        <section class="hero">
-            <h1>Беседы в Telegram</h1>
-            <p>Найди праков, приватные T3 каналы, кланы и тимейтов — всё в одной экосистеме</p>
-        </section>
+        <!-- HERO -->
+        <div class="hero">
+            <div class="hero-sub">PROFESSIONAL STANDOFF 2 TEAM</div>
+            <div class="hero-title">CRAVN</div>
+        </div>
 
-        <!-- КАРТОЧКИ УСЛУГ -->
-        <div class="grid">
-            <div class="card">
-                <div class="card-icon">🔍</div>
-                <h3>Поиск праков</h3>
-                <p>Собирай команду профессионалов: аналитики, разработчики, дизайнеры — все в ReSota.</p>
-                <span class="tag">#P2P</span>
-            </div>
-            <div class="card">
-                <div class="card-icon">🔒</div>
-                <h3>T3 приват каналы</h3>
-                <p>Закрытые сообщества с эксклюзивным контентом, стратегиями и аналитикой.</p>
-                <span class="tag">#Private</span>
-            </div>
-            <div class="card">
-                <div class="card-icon">⚔️</div>
-                <h3>Поиск кланов</h3>
-                <p>Найди свой клан по интересам: киберспорт, крипта, стартапы, творчество.</p>
-                <span class="tag">#Clans</span>
-            </div>
-            <div class="card">
-                <div class="card-icon">🤝</div>
-                <h3>Поиск тимейтов</h3>
-                <p>Напарники для проектов, игр, бизнеса — подбор по навыкам и целям.</p>
-                <span class="tag">#Teammates</span>
+        <!-- О НАС + СТАТИСТИКА -->
+        <div class="about">
+            <div class="about-title">О НАС</div>
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-number">33</div>
+                    <div class="stat-label">ПОБЕДЫ</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">ПОРАЖЕНИЙ</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number green">100%</div>
+                    <div class="stat-label">ВИНРЕЙТ</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">33</div>
+                    <div class="stat-label">СЫГРАНО МАТЧЕЙ</div>
+                </div>
             </div>
         </div>
 
-        <!-- ФУТЕР -->
-        <footer class="footer">
-            <p>© 2026 <span>ReSota</span> — экосистема для бесед в Telegram. Сделано с ❤️ и 3D-стилем.</p>
-        </footer>
+        <!-- СОСТАВ КОМАНДЫ -->
+        <div class="roster-title">СОСТАВ КОМАНДЫ</div>
+
+        <div class="roster-grid">
+            <!-- 1 -->
+            <div class="player-card">
+                <div class="player-name">КЛ1Р</div>
+                <div class="player-role">ИГРОК</div>
+                <div class="player-kd">2.50</div>
+                <div class="player-kd-label">К/Д</div>
+            </div>
+            <!-- 2 -->
+            <div class="player-card">
+                <div class="player-name">CRAVANILIS</div>
+                <div class="player-role">ИГРОК</div>
+                <div class="player-kd">2.50</div>
+                <div class="player-kd-label">К/Д</div>
+            </div>
+            <!-- 3 -->
+            <div class="player-card">
+                <div class="player-name">GLAVICIUS</div>
+                <div class="player-role">ИГРОК</div>
+                <div class="player-kd">2.50</div>
+                <div class="player-kd-label">К/Д</div>
+            </div>
+            <!-- 4 -->
+            <div class="player-card">
+                <div class="player-name">G1NUX 52</div>
+                <div class="player-role">ИГРОК</div>
+                <div class="player-kd">2.50</div>
+                <div class="player-kd-label">К/Д</div>
+            </div>
+            <!-- 5 -->
+            <div class="player-card">
+                <div class="player-name">KLINXXX</div>
+                <div class="player-role">ИГРОК</div>
+                <div class="player-kd">2.50</div>
+                <div class="player-kd-label">К/Д</div>
+            </div>
+            <!-- 6 (SICH1) — добавим шестым, т.к. на картинке 6 имён, но в сетке 5 колонок, сделаем перенос -->
+            <div class="player-card" style="grid-column: span 1;">
+                <div class="player-name">SICH1</div>
+                <div class="player-role">ИГРОК</div>
+                <div class="player-kd">2.50</div>
+                <div class="player-kd-label">К/Д</div>
+            </div>
+        </div>
+
+        <!-- СОЦИАЛЬНЫЕ СЕТИ -->
+        <div class="socials">
+            <div class="socials-label">НАШИ СОЦИАЛЬНЫЕ СЕТИ</div>
+            <div class="social-links">
+                <a href="#" class="social-link">
+                    <span class="icon">📱</span> TELEGRAM
+                    <span style="color:#6a7fa0; font-weight:400; margin-left:4px;">t.me/CRAVNkomanda</span>
+                </a>
+                <a href="#" class="social-link">
+                    <span class="icon">🎵</span> TIKTOK
+                    <span style="color:#6a7fa0; font-weight:400; margin-left:4px;">@cravanilis</span>
+                </a>
+                <a href="#" class="social-link">
+                    <span class="icon">▶️</span> YOUTUBE
+                    <span style="color:#6a7fa0; font-weight:400; margin-left:4px;">@CRAVN1</span>
+                </a>
+            </div>
+        </div>
+
     </div>
-
-    <!-- Лёгкий JavaScript для параллакс-эффекта 3D наведения (опционально) -->
-    <script>
-        (function() {
-            // Добавим эффект "слежения" мыши за карточками (лёгкий 3D tilt)
-            const cards = document.querySelectorAll('.card');
-            const container = document.querySelector('.container');
-
-            cards.forEach(card => {
-                card.addEventListener('mousemove', (e) => {
-                    const rect = card.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const y = e.clientY - rect.top;
-                    const centerX = rect.width / 2;
-                    const centerY = rect.height / 2;
-                    const rotateY = ((x - centerX) / centerX) * 6;   // -6deg … 6deg
-                    const rotateX = ((centerY - y) / centerY) * 6;
-                    card.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`;
-                });
-
-                card.addEventListener('mouseleave', () => {
-                    // Возвращаем исходное состояние (с учётом nth-child)
-                    const index = Array.from(cards).indexOf(card);
-                    const baseRotateX = 2;
-                    const baseRotateY = [ -3, 2, -1, 4 ][index] || 0;
-                    card.style.transform = `perspective(800px) rotateX(${baseRotateX}deg) rotateY(${baseRotateY}deg) translateZ(0)`;
-                });
-            });
-
-            // Эффект для шапки при наведении мыши
-            const header = document.querySelector('.header');
-            header.addEventListener('mousemove', (e) => {
-                const rect = header.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                const centerX = rect.width / 2;
-                const centerY = rect.height / 2;
-                const rotateY = ((x - centerX) / centerX) * 2;
-                const rotateX = ((centerY - y) / centerY) * 2;
-                header.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(20px)`;
-            });
-            header.addEventListener('mouseleave', () => {
-                header.style.transform = `rotateX(2deg) rotateY(-1deg) translateZ(10px)`;
-            });
-
-        })();
-    </script>
 </body>
 </html>
