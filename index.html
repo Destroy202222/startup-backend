@@ -1,591 +1,864 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Faceit — поиск игроков 5x5</title>
-    <style>
-        /* ----- СБРОС И ШРИФТЫ ----- */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Faceit 5x5 — Поиск матча</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"/>
+  <style>
+    /* ===== КОРНЕВЫЕ ПЕРЕМЕННЫЕ ===== */
+    :root {
+      --primary: #ff7b00;
+      --primary-hover: #ff9a33;
+      --primary-glow: rgba(255,123,0,0.25);
+      --bg-main: #1a1a2e;
+      --bg-card: rgba(26,26,46,0.92);
+      --bg-input: rgba(40,40,60,0.8);
+      --border-color: rgba(255,255,255,0.08);
+      --text-primary: #f5f0e8;
+      --text-secondary: #c8c0b8;
+      --text-muted: #888080;
+      --shadow-color: rgba(255,123,0,0.15);
+      --gradient-start: #ff7b00;
+      --gradient-end: #ffb347;
+      --success: #2e7d32;
+      --success-text: #81c784;
+      --danger: #7d2e2e;
+      --danger-text: #ff6b6b;
+    }
+    body[data-theme="red"] {
+      --primary: #e03131;
+      --primary-hover: #fa5252;
+      --primary-glow: rgba(224,49,49,0.25);
+      --gradient-start: #e03131;
+      --gradient-end: #fa5252;
+      --shadow-color: rgba(224,49,49,0.15);
+    }
+    body[data-theme="green"] {
+      --primary: #2b8a3e;
+      --primary-hover: #40c057;
+      --primary-glow: rgba(43,138,62,0.25);
+      --gradient-start: #2b8a3e;
+      --gradient-end: #40c057;
+      --shadow-color: rgba(43,138,62,0.15);
+    }
+    body[data-theme="black"] {
+      --primary: #ffffff;
+      --primary-hover: #cccccc;
+      --primary-glow: rgba(255,255,255,0.15);
+      --gradient-start: #ffffff;
+      --gradient-end: #888888;
+      --shadow-color: rgba(255,255,255,0.1);
+      --bg-main: #0d0d0d;
+      --bg-card: rgba(20,20,20,0.92);
+      --border-color: rgba(255,255,255,0.06);
+      --text-primary: #ffffff;
+      --text-secondary: #aaaaaa;
+      --text-muted: #666666;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,sans-serif; }
+    body {
+      background: var(--bg-main);
+      color: var(--text-primary);
+      min-height:100vh;
+      transition: background .3s,color .3s;
+    }
+    .main-wrapper { position:relative; z-index:1; min-height:100vh; }
 
-        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+    /* ===== НАВИГАЦИЯ ===== */
+    .header {
+      background: var(--bg-main);
+      border-bottom:2px solid var(--primary);
+      padding:.6rem 2rem;
+      position:sticky; top:0; z-index:1000;
+      box-shadow:0 4px 30px rgba(0,0,0,0.3);
+    }
+    .header-inner {
+      max-width:1300px; margin:0 auto;
+      display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem;
+    }
+    .logo-center { flex:1; text-align:center; cursor:pointer; transition:.3s; }
+    .logo-center:hover { transform:scale(1.02); }
+    .logo-center h1 {
+      font-size:1.6rem; font-weight:900; letter-spacing:1px;
+      background:linear-gradient(45deg,var(--gradient-start),var(--gradient-end),var(--gradient-start));
+      background-size:200% auto;
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      animation:shimmer 3s linear infinite;
+      display:inline-block;
+    }
+    @keyframes shimmer { 0%{background-position:0% center;} 100%{background-position:200% center;} }
+    .logo-center .badge {
+      background:var(--primary); color:var(--bg-main);
+      padding:.05rem .8rem; border-radius:20px;
+      font-weight:700; font-size:.65rem;
+      -webkit-text-fill-color:var(--bg-main);
+      display:inline-block; margin-left:.4rem;
+    }
+    .logo-center .sub {
+      display:block; font-size:.6rem; color:var(--text-secondary);
+      font-weight:600; letter-spacing:2px;
+      -webkit-text-fill-color:var(--text-secondary);
+      margin-top:.1rem;
+    }
+    .right-buttons { display:flex; align-items:center; gap:.6rem; }
+    .dropdown { position:relative; display:inline-block; }
+    .dropdown-btn {
+      background:var(--bg-input); color:var(--text-primary);
+      padding:.4rem 1.2rem; border:2px solid var(--primary); border-radius:40px;
+      font-weight:700; font-size:.85rem; cursor:pointer;
+      display:flex; align-items:center; gap:.4rem;
+      transition:.3s;
+    }
+    .dropdown-btn:hover { background:var(--primary-glow); box-shadow:0 0 20px var(--primary-glow); }
+    .dropdown-btn i { color:var(--primary); font-size:.85rem; }
+    .dropdown.active .dropdown-btn i.fa-chevron-down { transform:rotate(180deg); }
+    .dropdown-content {
+      display:none; position:absolute; right:0; top:110%;
+      min-width:200px; background:var(--bg-card); backdrop-filter:blur(12px);
+      border-radius:16px; border:1px solid var(--border-color);
+      box-shadow:0 20px 60px rgba(0,0,0,.8);
+      overflow:hidden; animation:slideDown .3s ease;
+    }
+    .dropdown.active .dropdown-content { display:block; }
+    @keyframes slideDown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+    .dropdown-content a {
+      display:flex; align-items:center; gap:.6rem;
+      padding:.6rem 1.2rem; color:var(--text-secondary);
+      text-decoration:none; border-bottom:1px solid var(--border-color);
+      font-weight:600; font-size:.85rem; cursor:pointer;
+      transition:.3s;
+    }
+    .dropdown-content a:last-child { border-bottom:none; }
+    .dropdown-content a:hover { background:var(--primary-glow); color:var(--primary); }
+    .dropdown-content a i { width:18px; color:var(--primary); font-size:.9rem; }
+    .dropdown-content .divider { height:1px; background:var(--border-color); margin:.2rem 0; }
+    .btn-connect {
+      background:linear-gradient(45deg,var(--gradient-start),var(--gradient-end));
+      color:var(--bg-main); padding:.4rem 1.5rem; border-radius:40px;
+      font-weight:700; font-size:.85rem; border:none; cursor:pointer;
+      display:inline-flex; align-items:center; gap:.4rem;
+      box-shadow:0 0 20px var(--primary-glow);
+      transition:.3s; text-decoration:none;
+    }
+    .btn-connect:hover { transform:scale(1.05); box-shadow:0 0 30px var(--primary-glow); }
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #0b0e14;
-            color: #eef2ff;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 24px;
-            line-height: 1.5;
-        }
+    /* ===== АВТОРИЗАЦИЯ ===== */
+    .auth-page {
+      display:flex; justify-content:center; align-items:center;
+      min-height:100vh; padding:2rem;
+      position:relative; z-index:2;
+    }
+    .auth-container {
+      max-width:420px; width:100%;
+      background:var(--bg-card); backdrop-filter:blur(12px);
+      border-radius:24px; padding:2.5rem;
+      border:1px solid var(--border-color);
+      box-shadow:0 20px 60px rgba(0,0,0,.6);
+      animation:fadeIn .5s ease;
+      position:relative; z-index:3;
+    }
+    .auth-container .auth-logo { text-align:center; margin-bottom:2rem; }
+    .auth-container .auth-logo h1 {
+      font-size:2rem; font-weight:900;
+      background:linear-gradient(45deg,var(--gradient-start),var(--gradient-end));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    }
+    .auth-container .auth-logo p { color:var(--text-secondary); font-size:.9rem; font-weight:500; }
+    .auth-container h2 { text-align:center; margin-bottom:1.5rem; font-size:1.5rem; color:var(--text-primary); font-weight:800; }
+    .auth-container .form-group { margin-bottom:1.2rem; }
+    .auth-container .form-group label { display:block; color:var(--text-secondary); margin-bottom:.3rem; font-size:.9rem; font-weight:600; }
+    .auth-container .form-group label .required { color:#ff6b6b; margin-left:.2rem; }
+    .auth-container .form-group input {
+      width:100%; padding:.8rem 1rem;
+      background:var(--bg-input); border:2px solid var(--border-color); border-radius:12px;
+      color:var(--text-primary); font-size:1rem; transition:.3s;
+    }
+    .auth-container .form-group input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 20px var(--primary-glow); }
+    .auth-container .btn-submit {
+      width:100%; padding:.9rem;
+      background:linear-gradient(45deg,var(--gradient-start),var(--gradient-end));
+      border:none; border-radius:40px;
+      font-weight:700; font-size:1.1rem; color:var(--bg-main);
+      cursor:pointer; transition:.3s; margin-top:.5rem;
+    }
+    .auth-container .btn-submit:hover { transform:scale(1.02); box-shadow:0 0 30px var(--primary-glow); }
+    .auth-container .auth-links { text-align:center; margin-top:1.5rem; }
+    .auth-container .auth-links a { color:var(--primary); cursor:pointer; font-weight:600; transition:.3s; }
+    .auth-container .auth-links a:hover { text-decoration:underline; color:var(--primary-hover); }
 
-        /* ----- КОНТЕЙНЕР ----- */
-        .container {
-            position: relative;
-            max-width: 1200px;
-            width: 100%;
-            background: rgba(14, 18, 30, 0.7);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-radius: 40px;
-            padding: 32px 36px 36px;
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            z-index: 1;
-        }
+    /* ===== ОСНОВНОЙ КОНТЕНТ ===== */
+    .main-content { display:none; }
+    .main-content.visible { display:block; }
 
-        /* ----- ДЕКОРАТИВНЫЙ ФОН (CSS-графика) ----- */
-        .bg-art {
-            position: absolute;
-            inset: 0;
-            z-index: 0;
-            pointer-events: none;
-            overflow: hidden;
-            border-radius: 40px;
-        }
+    .page-content {
+      display:none; max-width:1300px; margin:2rem auto; padding:0 2rem;
+      animation:fadeIn .4s ease; position:relative; z-index:2;
+    }
+    .page-content.active { display:block; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    .page-content .page-title {
+      font-size:2.4rem; font-weight:900;
+      background:linear-gradient(45deg,var(--gradient-start),var(--gradient-end));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      margin-bottom:.5rem;
+    }
+    .page-content .sub-title { color:var(--text-secondary); font-size:1rem; margin-bottom:2rem; font-weight:500; }
 
-        .bg-art::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background:
-                radial-gradient(ellipse 70% 60% at 20% 80%, rgba(88, 130, 255, 0.10) 0%, transparent 80%),
-                radial-gradient(ellipse 50% 50% at 80% 20%, rgba(0, 230, 255, 0.06) 0%, transparent 70%),
-                radial-gradient(ellipse 40% 40% at 60% 70%, rgba(120, 80, 255, 0.05) 0%, transparent 60%);
-        }
+    /* ===== ГЛАВНАЯ СТРАНИЦА ===== */
+    .hero-center {
+      max-width:700px; margin:0 auto; text-align:center;
+    }
+    .queue-status {
+      background:var(--bg-card); backdrop-filter:blur(8px);
+      border-radius:24px; padding:2.5rem;
+      border:1px solid var(--border-color);
+      margin-bottom:2rem;
+    }
+    .queue-status .count {
+      font-size:4rem; font-weight:900;
+      background:linear-gradient(45deg,var(--gradient-start),var(--gradient-end));
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+      line-height:1.2;
+    }
+    .queue-status .label {
+      color:var(--text-secondary); font-size:1.2rem; font-weight:600;
+      margin-top:.3rem;
+    }
+    .btn-queue {
+      background:linear-gradient(45deg,var(--gradient-start),var(--gradient-end));
+      color:var(--bg-main); padding:.8rem 3rem; border-radius:60px;
+      font-weight:800; font-size:1.2rem; border:none; cursor:pointer;
+      box-shadow:0 0 30px var(--primary-glow);
+      transition:.3s; display:inline-flex; align-items:center; gap:.6rem;
+    }
+    .btn-queue:hover { transform:scale(1.05); box-shadow:0 0 50px var(--primary-glow); }
+    .btn-queue.leave { background:#ff6b6b; color:#fff; box-shadow:0 0 20px rgba(255,0,0,0.3); }
+    .btn-queue.leave:hover { background:#ff4444; }
 
-        .shape {
-            position: absolute;
-            border-radius: 50%;
-            opacity: 0.2;
-            filter: blur(80px);
-        }
-        .shape--1 {
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(0, 180, 255, 0.12), transparent 70%);
-            top: -150px;
-            right: -100px;
-            animation: float 18s infinite alternate ease-in-out;
-        }
-        .shape--2 {
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(120, 80, 255, 0.10), transparent 70%);
-            bottom: -120px;
-            left: -80px;
-            animation: float 22s infinite alternate-reverse ease-in-out;
-        }
+    .info-features {
+      display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1.5rem;
+      margin-top:2rem;
+    }
+    .feature-card {
+      background:var(--bg-card); backdrop-filter:blur(8px);
+      border-radius:16px; padding:1.5rem;
+      border:1px solid var(--border-color);
+      text-align:center; transition:.3s;
+    }
+    .feature-card:hover { border-color:var(--primary); transform:translateY(-3px); }
+    .feature-card .icon { font-size:2rem; color:var(--primary); margin-bottom:.5rem; }
+    .feature-card h3 { color:var(--text-primary); font-weight:700; }
+    .feature-card p { color:var(--text-secondary); font-size:.85rem; margin-top:.3rem; font-weight:500; }
 
-        @keyframes float {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(30px, -20px) scale(1.05); }
-        }
+    /* ===== СТРАНИЦА МАТЧА ===== */
+    .match-grid {
+      display:grid; grid-template-columns:1fr 1fr; gap:2rem;
+      margin:2rem 0;
+    }
+    .team-card {
+      background:var(--bg-card); backdrop-filter:blur(8px);
+      border-radius:24px; padding:1.5rem;
+      border:1px solid var(--border-color);
+      transition:.3s;
+    }
+    .team-card:hover { border-color:var(--primary); }
+    .team-card h3 {
+      font-size:1.5rem; font-weight:800;
+      color:var(--text-primary);
+      margin-bottom:1rem;
+      display:flex; align-items:center; gap:.6rem;
+    }
+    .team-card .team-icon { font-size:1.8rem; }
+    .team-card.terrorists { border-left:4px solid #ff6b6b; }
+    .team-card.ct { border-left:4px solid #51cf66; }
+    .player-item {
+      display:flex; align-items:center; gap:.8rem;
+      padding:.5rem .8rem; background:var(--bg-input);
+      border-radius:12px; margin-bottom:.4rem;
+      border:1px solid var(--border-color);
+    }
+    .player-item .player-avatar {
+      width:32px; height:32px; border-radius:50%;
+      background:var(--primary-glow); display:flex;
+      align-items:center; justify-content:center;
+      font-weight:700; color:var(--primary);
+      flex-shrink:0;
+    }
+    .player-item .player-name { font-weight:600; color:var(--text-primary); }
+    .player-item .player-status { margin-left:auto; font-size:.7rem; color:#51cf66; }
 
-        /* ----- ШАПКА ----- */
-        .header {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-        }
+    .match-actions { text-align:center; margin-top:2rem; }
 
-        .logo {
-            font-weight: 800;
-            font-size: 28px;
-            letter-spacing: -0.5px;
-            background: linear-gradient(135deg, #f0f4ff, #5882ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .logo span {
-            font-weight: 400;
-            font-size: 16px;
-            background: none;
-            -webkit-text-fill-color: rgba(255,255,255,0.3);
-            margin-left: 6px;
-        }
+    /* ===== ПРОФИЛЬ ===== */
+    .profile-card {
+      background:var(--bg-card); backdrop-filter:blur(8px);
+      border-radius:24px; padding:2rem;
+      border:1px solid var(--border-color);
+      max-width:480px; margin:0 auto;
+    }
+    .profile-card .profile-header {
+      display:flex; align-items:center; gap:1.2rem; margin-bottom:1.5rem;
+    }
+    .profile-avatar {
+      width:64px; height:64px; border-radius:50%;
+      background:linear-gradient(135deg,var(--gradient-start),var(--gradient-end));
+      display:flex; align-items:center; justify-content:center;
+      font-size:1.8rem; font-weight:900; color:var(--bg-main);
+      flex-shrink:0;
+    }
+    .profile-card .profile-info h2 { font-size:1.3rem; }
+    .profile-card .profile-info .sub { color:var(--text-secondary); font-size:.8rem; }
+    .profile-card .stats-grid {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem;
+      margin-top:1rem;
+    }
+    .profile-card .stat-item {
+      background:var(--bg-input); border-radius:12px; padding:.6rem;
+      text-align:center; border:1px solid var(--border-color);
+    }
+    .profile-card .stat-item .number { font-size:1.2rem; font-weight:800; color:var(--primary); }
+    .profile-card .stat-item .label { color:var(--text-secondary); font-size:.6rem; font-weight:600; text-transform:uppercase; }
 
-        .nav {
-            display: flex;
-            gap: 28px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        .nav a {
-            color: rgba(255, 255, 255, 0.5);
-            text-decoration: none;
-            transition: color 0.3s;
-            position: relative;
-        }
-        .nav a::after {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: linear-gradient(90deg, #5882ff, #00e6ff);
-            transition: width 0.3s;
-        }
-        .nav a:hover {
-            color: #fff;
-        }
-        .nav a:hover::after {
-            width: 100%;
-        }
+    /* ===== НАСТРОЙКИ ===== */
+    .settings-card {
+      max-width:600px; margin:0 auto; background:var(--bg-card);
+      border-radius:24px; padding:2rem; border:1px solid var(--border-color);
+    }
+    .settings-card .setting-row {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:.8rem 0; border-bottom:1px solid var(--border-color);
+      flex-wrap:wrap; gap:.5rem;
+    }
+    .settings-card .setting-row:last-child { border-bottom:none; }
+    .settings-card .setting-row .label { color:var(--text-secondary); font-weight:600; }
+    .settings-card .setting-row select {
+      background:var(--bg-input); border:2px solid var(--border-color);
+      border-radius:12px; padding:.4rem .8rem; color:var(--text-primary);
+      font-weight:600; cursor:pointer;
+    }
+    .settings-card .btn-save {
+      margin-top:1.5rem; width:100%; padding:.8rem;
+      background:var(--primary); border:none; border-radius:40px;
+      font-weight:700; color:var(--bg-main); cursor:pointer;
+      transition:.3s;
+    }
+    .settings-card .btn-save:hover { background:var(--primary-hover); box-shadow:0 0 20px var(--primary-glow); }
 
-        /* ----- ПОИСКОВАЯ СЕКЦИЯ ----- */
-        .search-section {
-            position: relative;
-            z-index: 2;
-            margin: 28px 0 32px;
-        }
+    /* ===== ФУТЕР ===== */
+    .footer {
+      background:var(--bg-main); border-top:1px solid var(--border-color);
+      padding:2rem; text-align:center;
+      color:var(--text-muted); margin-top:3rem;
+    }
+    .footer .socials { font-size:1.5rem; margin-bottom:1rem; }
+    .footer .socials a { color:var(--text-secondary); margin:0 .8rem; transition:.3s; }
+    .footer .socials a:hover { color:var(--primary); transform:scale(1.1); }
 
-        .search-title {
-            font-size: 28px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            margin-bottom: 6px;
-        }
-        .search-title small {
-            font-weight: 400;
-            font-size: 16px;
-            color: rgba(255,255,255,0.3);
-            margin-left: 10px;
-        }
+    /* ===== TOAST ===== */
+    .toast {
+      position:fixed; bottom:2rem; right:2rem;
+      background:var(--bg-card); backdrop-filter:blur(12px);
+      border:1px solid var(--border-color); border-radius:16px;
+      padding:1rem 1.5rem; box-shadow:0 20px 60px rgba(0,0,0,.8);
+      transform:translateY(100px); opacity:0;
+      transition:.4s ease; z-index:9999; max-width:400px;
+    }
+    .toast.visible { transform:translateY(0); opacity:1; }
+    .toast .toast-title { font-weight:800; margin-bottom:.3rem; }
+    .toast .toast-title.success { color:#51cf66; }
+    .toast .toast-title.error { color:#ff6b6b; }
+    .toast .toast-title.info { color:var(--primary); }
+    .toast .toast-text { color:var(--text-secondary); font-size:.9rem; font-weight:500; }
 
-        .search-bar {
-            display: flex;
-            gap: 12px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
-
-        .search-input {
-            flex: 1;
-            min-width: 200px;
-            padding: 14px 20px;
-            border-radius: 60px;
-            border: 1px solid rgba(255,255,255,0.06);
-            background: rgba(255,255,255,0.04);
-            color: #fff;
-            font-size: 16px;
-            outline: none;
-            transition: border-color 0.3s, box-shadow 0.3s;
-            backdrop-filter: blur(4px);
-        }
-        .search-input::placeholder {
-            color: rgba(255,255,255,0.25);
-            font-weight: 400;
-        }
-        .search-input:focus {
-            border-color: rgba(88, 130, 255, 0.5);
-            box-shadow: 0 0 0 4px rgba(88, 130, 255, 0.08);
-        }
-
-        .search-btn {
-            padding: 14px 32px;
-            border-radius: 60px;
-            border: none;
-            background: linear-gradient(135deg, #5882ff, #3b5fd9);
-            color: #fff;
-            font-weight: 600;
-            font-size: 16px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.3s;
-            box-shadow: 0 8px 24px rgba(88, 130, 255, 0.2);
-        }
-        .search-btn:hover {
-            transform: scale(1.02);
-            box-shadow: 0 12px 32px rgba(88, 130, 255, 0.3);
-        }
-
-        /* ----- СТАТИСТИКА ЛОББИ (сбор команды) ----- */
-        .lobby-stats {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            align-items: center;
-            gap: 24px;
-            flex-wrap: wrap;
-            background: rgba(255,255,255,0.03);
-            border-radius: 30px;
-            padding: 14px 28px;
-            margin-bottom: 28px;
-            border: 1px solid rgba(255,255,255,0.04);
-            backdrop-filter: blur(8px);
-        }
-
-        .lobby-stats span {
-            font-weight: 500;
-            color: rgba(255,255,255,0.5);
-        }
-        .lobby-stats .count {
-            font-weight: 700;
-            font-size: 22px;
-            color: #fff;
-            margin-right: 4px;
-        }
-        .lobby-stats .highlight {
-            color: #5882ff;
-        }
-        .lobby-stats .invite-btn {
-            margin-left: auto;
-            padding: 8px 24px;
-            border-radius: 40px;
-            border: 1px solid rgba(88, 130, 255, 0.3);
-            background: transparent;
-            color: #5882ff;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        .lobby-stats .invite-btn:hover {
-            background: rgba(88, 130, 255, 0.1);
-            border-color: #5882ff;
-        }
-
-        /* ----- СЕТКА ИГРОКОВ ----- */
-        .players-grid {
-            position: relative;
-            z-index: 2;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 16px;
-            margin-top: 8px;
-        }
-
-        .player-card {
-            background: rgba(255,255,255,0.02);
-            backdrop-filter: blur(6px);
-            border-radius: 24px;
-            padding: 20px 14px 16px;
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.03);
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-        }
-        .player-card:hover {
-            background: rgba(255,255,255,0.05);
-            border-color: rgba(88, 130, 255, 0.15);
-            transform: translateY(-4px);
-        }
-        .player-card .avatar {
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #2a2f44, #1b1f2e);
-            margin: 0 auto 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            font-weight: 700;
-            color: rgba(255,255,255,0.2);
-            border: 2px solid rgba(255,255,255,0.05);
-        }
-        .player-card .name {
-            font-weight: 600;
-            font-size: 17px;
-            color: #fff;
-            letter-spacing: 0.2px;
-        }
-        .player-card .level {
-            font-size: 13px;
-            font-weight: 500;
-            color: #5882ff;
-            margin: 4px 0 10px;
-            background: rgba(88,130,255,0.12);
-            display: inline-block;
-            padding: 2px 14px;
-            border-radius: 20px;
-        }
-        .player-card .stats {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            font-size: 13px;
-            color: rgba(255,255,255,0.4);
-            margin-bottom: 12px;
-        }
-        .player-card .stats strong {
-            color: #fff;
-            font-weight: 600;
-        }
-        .player-card .invite {
-            padding: 6px 20px;
-            border-radius: 40px;
-            border: none;
-            background: rgba(88,130,255,0.15);
-            color: #5882ff;
-            font-weight: 600;
-            font-size: 13px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        .player-card .invite:hover {
-            background: rgba(88,130,255,0.25);
-        }
-        .player-card .invite.invited {
-            background: rgba(0,230,200,0.15);
-            color: #00e6c8;
-            cursor: default;
-        }
-
-        /* ----- ПОДВАЛ (соцсети) ----- */
-        .footer {
-            position: relative;
-            z-index: 2;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255,255,255,0.04);
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 16px;
-            align-items: center;
-        }
-        .footer .copy {
-            font-size: 13px;
-            color: rgba(255,255,255,0.2);
-        }
-        .footer .links {
-            display: flex;
-            gap: 24px;
-        }
-        .footer .links a {
-            color: rgba(255,255,255,0.3);
-            text-decoration: none;
-            font-size: 14px;
-            transition: color 0.3s;
-        }
-        .footer .links a:hover {
-            color: #fff;
-        }
-
-        /* ----- АДАПТИВ ----- */
-        @media (max-width: 820px) {
-            .container { padding: 24px 20px; }
-            .search-title { font-size: 22px; }
-            .lobby-stats { flex-direction: column; align-items: stretch; gap: 12px; }
-            .lobby-stats .invite-btn { margin-left: 0; }
-        }
-        @media (max-width: 540px) {
-            .header { flex-direction: column; align-items: flex-start; }
-            .nav { gap: 16px; font-size: 13px; flex-wrap: wrap; }
-            .search-title { font-size: 20px; }
-            .search-bar { flex-direction: column; }
-            .search-btn { width: 100%; }
-            .players-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 400px) {
-            .players-grid { grid-template-columns: 1fr; }
-            .container { padding: 16px; }
-        }
-    </style>
+    /* ===== АДАПТИВ ===== */
+    @media (max-width:800px) {
+      .header-inner { flex-direction:column; align-items:center; text-align:center; }
+      .right-buttons { flex-direction:column; width:100%; }
+      .dropdown { width:100%; }
+      .dropdown-btn { width:100%; justify-content:center; }
+      .dropdown-content { right:auto; left:0; width:100%; }
+      .btn-connect { width:100%; justify-content:center; }
+      .match-grid { grid-template-columns:1fr; }
+      .profile-card .profile-header { flex-direction:column; text-align:center; }
+      .queue-status .count { font-size:3rem; }
+    }
+    @media (max-width:500px) {
+      .queue-status .count { font-size:2.5rem; }
+      .btn-queue { width:100%; justify-content:center; }
+    }
+  </style>
 </head>
-<body>
+<body data-theme="orange">
 
-<div class="container">
+<div class="toast" id="toast">
+  <div class="toast-title" id="toastTitle">Успешно!</div>
+  <div class="toast-text" id="toastText">Действие выполнено</div>
+</div>
 
-    <!-- Декоративный фон -->
-    <div class="bg-art">
-        <div class="shape shape--1"></div>
-        <div class="shape shape--2"></div>
+<!-- ===== АВТОРИЗАЦИЯ ===== -->
+<div class="auth-page" id="authPage">
+  <div class="auth-container">
+    <div class="auth-logo"><h1>⚡ Faceit 5x5</h1><p>Поиск матчей по Standoff 2</p></div>
+    <div id="loginForm">
+      <h2>Вход</h2>
+      <div class="form-group"><label>Имя пользователя</label><input type="text" id="loginUsername" placeholder="Введите имя" /></div>
+      <div class="form-group"><label>Пароль</label><input type="password" id="loginPassword" placeholder="Введите пароль" /></div>
+      <button class="btn-submit" id="loginBtn">Войти</button>
+      <div class="auth-links"><a onclick="showAuthForm('register')">Нет аккаунта? Зарегистрироваться</a></div>
     </div>
+    <div id="registerForm" style="display:none;">
+      <h2>Регистрация</h2>
+      <div class="form-group"><label>Имя пользователя <span class="required">*</span></label><input type="text" id="regUsername" placeholder="Придумайте имя" /></div>
+      <div class="form-group"><label>ID Standoff 2 <span class="required">*</span></label><input type="text" id="regStandoffId" placeholder="Только цифры" /></div>
+      <div class="form-group"><label>Пароль <span class="required">*</span></label><input type="password" id="regPassword" placeholder="Минимум 8 символов" /></div>
+      <div class="form-group"><label>Подтверждение пароля <span class="required">*</span></label><input type="password" id="regPasswordConfirm" placeholder="Повторите пароль" /></div>
+      <button class="btn-submit" id="registerBtn">Зарегистрироваться</button>
+      <div class="auth-links"><a onclick="showAuthForm('login')">Уже есть аккаунт? Войти</a></div>
+    </div>
+  </div>
+</div>
 
-    <!-- Шапка -->
-    <header class="header">
-        <div class="logo">Faceit <span>| поиск 5x5</span></div>
-        <nav class="nav">
-            <a href="#">Игроки</a>
-            <a href="#">Лобби</a>
-            <a href="#">Рейтинг</a>
-            <a href="#">Матчи</a>
-        </nav>
+<div class="main-wrapper">
+  <div class="main-content" id="mainSite">
+    <header class="header" id="header">
+      <div class="header-inner">
+        <div class="logo-center" onclick="showPage('mainPage')" title="На главную">
+          <h1>⚡ Faceit <span class="badge">5x5</span><span class="sub">✦ Matchmaking Standoff 2 ✦</span></h1>
+        </div>
+        <div class="right-buttons">
+          <div class="dropdown" id="catalogDropdown">
+            <button class="dropdown-btn" onclick="toggleCatalog()"><i class="fas fa-bars"></i> Меню <i class="fas fa-chevron-down" style="font-size:.7rem;"></i></button>
+            <div class="dropdown-content">
+              <a href="#" onclick="showPage('mainPage'); toggleCatalog(); return false;"><i class="fas fa-home"></i> Главная</a>
+              <a href="#" onclick="showPage('profilePage'); toggleCatalog(); return false;"><i class="fas fa-user"></i> Мой профиль</a>
+              <a href="#" onclick="showPage('settingsPage'); toggleCatalog(); return false;"><i class="fas fa-cog"></i> Настройки</a>
+              <div class="divider"></div>
+              <a href="#" onclick="handleLogout(); toggleCatalog(); return false;" style="color:#ff6b6b;"><i class="fas fa-sign-out-alt"></i> Выйти</a>
+            </div>
+          </div>
+          <a href="#" class="btn-connect" onclick="showPage('mainPage'); return false;"><i class="fas fa-gamepad"></i> Играть</a>
+        </div>
+      </div>
     </header>
 
-    <!-- Поиск -->
-    <div class="search-section">
-        <div class="search-title">
-            Найди тиммейтов <small>для игры 5 на 5</small>
+    <!-- ===== ГЛАВНАЯ ===== -->
+    <div class="page-content active" id="mainPage">
+      <div class="hero-center">
+        <div class="queue-status">
+          <div class="count" id="queueCount">0/10</div>
+          <div class="label">Игроков в очереди</div>
+          <div style="margin-top:1.5rem;">
+            <button class="btn-queue" id="queueBtn" onclick="toggleQueue()">
+              <i class="fas fa-search"></i> Найти матч
+            </button>
+          </div>
+          <div style="margin-top:.8rem; color:var(--text-muted); font-size:.85rem;" id="queueStatusText">Нажмите, чтобы начать поиск</div>
         </div>
-        <div class="search-bar">
-            <input type="text" class="search-input" id="searchInput" placeholder="Поиск по нику или уровню (1–10)" />
-            <button class="search-btn" id="searchBtn">🔍 Найти</button>
+
+        <div class="info-features">
+          <div class="feature-card"><div class="icon"><i class="fas fa-users"></i></div><h3>5×5 Матчи</h3><p>Собирайте команду из 10 игроков и играйте</p></div>
+          <div class="feature-card"><div class="icon"><i class="fas fa-shield-alt"></i></div><h3>Честная игра</h3><p>Случайное распределение по командам</p></div>
+          <div class="feature-card"><div class="icon"><i class="fas fa-clock"></i></div><h3>Быстрый поиск</h3><p>Как только наберётся 10 человек — матч начинается</p></div>
         </div>
+      </div>
     </div>
 
-    <!-- Статистика лобби -->
-    <div class="lobby-stats" id="lobbyStats">
-        <span>👥 В лобби: <span class="count" id="lobbyCount">0</span> / 5</span>
-        <span>⭐ Уровень команды: <span class="highlight" id="avgLevel">—</span></span>
-        <button class="invite-btn" id="clearLobbyBtn">Очистить лобби</button>
-    </div>
-
-    <!-- Сетка игроков -->
-    <div class="players-grid" id="playersGrid"></div>
-
-    <!-- Подвал -->
-    <div class="footer">
-        <div class="copy">© 2026 Faceit-подобный тест</div>
-        <div class="links">
-            <a href="#">Telegram</a>
-            <a href="#">Discord</a>
-            <a href="#">YouTube</a>
+    <!-- ===== СТРАНИЦА МАТЧА ===== -->
+    <div class="page-content" id="matchPage">
+      <h1 class="page-title"><i class="fas fa-swords"></i> Матч начался!</h1>
+      <p class="sub-title">Команды сформированы. Удачи!</p>
+      <div class="match-grid" id="matchGrid">
+        <div class="team-card terrorists">
+          <h3><span class="team-icon">🔴</span> Террористы</h3>
+          <div id="teamTerrorists"></div>
         </div>
+        <div class="team-card ct">
+          <h3><span class="team-icon">🟢</span> Контр-террористы</h3>
+          <div id="teamCT"></div>
+        </div>
+      </div>
+      <div class="match-actions">
+        <button class="btn-queue" onclick="endMatch()" style="background:#ff6b6b;color:#fff;box-shadow:0 0 20px rgba(255,0,0,0.3);">
+          <i class="fas fa-times"></i> Закончить матч
+        </button>
+      </div>
     </div>
+
+    <!-- ===== ПРОФИЛЬ ===== -->
+    <div class="page-content" id="profilePage">
+      <h1 class="page-title"><i class="fas fa-user"></i> Мой профиль</h1>
+      <p class="sub-title">Информация о вашем аккаунте</p>
+      <div class="profile-card" id="profileCard">
+        <div class="profile-header">
+          <div class="profile-avatar" id="profileAvatar">?</div>
+          <div class="profile-info">
+            <h2 id="profileName">Игрок</h2>
+            <div class="sub">🔫 Standoff ID: <span id="profileStandoffId">123456789</span></div>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-item"><div class="number" id="profileMatches">0</div><div class="label">Матчей</div></div>
+          <div class="stat-item"><div class="number" id="profileKills">0</div><div class="label">Убийств</div></div>
+          <div class="stat-item"><div class="number" id="profileDeaths">0</div><div class="label">Смертей</div></div>
+        </div>
+        <div style="margin-top:1rem; text-align:center;">
+          <button class="btn-queue" onclick="showPage('mainPage')" style="background:var(--primary);color:var(--bg-main);padding:.6rem 2rem;font-size:.9rem;">
+            <i class="fas fa-arrow-left"></i> На главную
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== НАСТРОЙКИ ===== -->
+    <div class="page-content" id="settingsPage">
+      <h1 class="page-title"><i class="fas fa-cog"></i> Настройки</h1>
+      <p class="sub-title">Тема и язык</p>
+      <div class="settings-card">
+        <div class="setting-row"><span class="label">Имя пользователя</span><span class="value" id="settingsName">Игрок</span></div>
+        <div class="setting-row"><span class="label">ID Standoff 2</span><span class="value" style="color:var(--primary);" id="settingsStandoffId">123456789</span></div>
+        <div class="setting-row"><span class="label">Язык</span><select id="languageSelect" onchange="changeLanguage(this.value)"><option value="ru">🇷🇺 Русский</option><option value="en">🇬🇧 English</option></select></div>
+        <div class="setting-row"><span class="label">Тема</span><select id="themeSelect" onchange="changeTheme(this.value)"><option value="orange">🟠 Оранжевая</option><option value="red">🔴 Красная</option><option value="green">🟢 Зелёная</option><option value="black">⚫ Чёрная</option></select></div>
+        <button class="btn-save" id="saveSettingsBtn"><i class="fas fa-save"></i> Сохранить настройки</button>
+      </div>
+      <div style="text-align:center;margin-top:1.5rem;">
+        <button class="btn-queue" onclick="showPage('mainPage')" style="background:var(--primary);color:var(--bg-main);padding:.6rem 2rem;font-size:.9rem;">
+          <i class="fas fa-arrow-left"></i> На главную
+        </button>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <div class="socials"><a href="#"><i class="fab fa-vk"></i></a><a href="#"><i class="fab fa-telegram"></i></a><a href="#"><i class="fab fa-youtube"></i></a><a href="#"><i class="fab fa-discord"></i></a></div>
+      <p>© 2026 Faceit 5x5 — неофициальный проект для сообщества Standoff 2</p>
+      <p style="font-size:.75rem;margin-top:.5rem;font-weight:500;">Сделано с ❤️</p>
+    </footer>
+  </div>
 </div>
 
 <script>
-    (function() {
-        // ----- ДАННЫЕ (статичные, без переменных) -----
-        const players = [
-            { name: 's1mple', level: 10, kd: 1.45, winrate: 68, avatar: 'S' },
-            { name: 'NiKo', level: 9, kd: 1.32, winrate: 62, avatar: 'N' },
-            { name: 'ZywOo', level: 10, kd: 1.50, winrate: 71, avatar: 'Z' },
-            { name: 'dev1ce', level: 8, kd: 1.28, winrate: 59, avatar: 'D' },
-            { name: 'electronic', level: 7, kd: 1.20, winrate: 55, avatar: 'E' },
-            { name: 'dupreeh', level: 8, kd: 1.19, winrate: 58, avatar: 'D' },
-            { name: 'flamie', level: 6, kd: 1.12, winrate: 50, avatar: 'F' },
-            { name: 'GuardiaN', level: 7, kd: 1.22, winrate: 52, avatar: 'G' },
-            { name: 'olofmeister', level: 9, kd: 1.30, winrate: 64, avatar: 'O' },
-            { name: 'JW', level: 6, kd: 1.15, winrate: 47, avatar: 'J' },
-            { name: 'karrigan', level: 8, kd: 1.10, winrate: 60, avatar: 'K' },
-            { name: 'rain', level: 7, kd: 1.18, winrate: 53, avatar: 'R' },
-            { name: 'shox', level: 8, kd: 1.21, winrate: 57, avatar: 'S' },
-            { name: 'kennyS', level: 9, kd: 1.33, winrate: 65, avatar: 'K' },
-            { name: 'apEX', level: 7, kd: 1.17, winrate: 54, avatar: 'A' }
-        ];
+  // ============================================================
+  // ГЛОБАЛЬНОЕ СОСТОЯНИЕ
+  // ============================================================
+  let currentUser = null;
+  let queue = [];              // массив { id, username }
+  let currentMatch = null;     // { terrorists: [...], ct: [...] }
 
-        // ----- СОСТОЯНИЕ ЛОББИ -----
-        let lobby = []; // массив ников приглашённых
+  // ============================================================
+  // АУТЕНТИФИКАЦИЯ (упрощённая, данные в localStorage)
+  // ============================================================
+  function getUsers() {
+    try { return JSON.parse(localStorage.getItem('faceit_users')) || []; } catch { return []; }
+  }
+  function saveUsers(users) {
+    localStorage.setItem('faceit_users', JSON.stringify(users));
+  }
+  function getCurrentUser() {
+    try { return JSON.parse(localStorage.getItem('faceit_current_user')); } catch { return null; }
+  }
+  function setCurrentUser(user) {
+    currentUser = user;
+    localStorage.setItem('faceit_current_user', JSON.stringify(user));
+  }
+  function clearCurrentUser() {
+    currentUser = null;
+    localStorage.removeItem('faceit_current_user');
+  }
 
-        // DOM-элементы
-        const grid = document.getElementById('playersGrid');
-        const searchInput = document.getElementById('searchInput');
-        const searchBtn = document.getElementById('searchBtn');
-        const lobbyCountEl = document.getElementById('lobbyCount');
-        const avgLevelEl = document.getElementById('avgLevel');
-        const clearLobbyBtn = document.getElementById('clearLobbyBtn');
+  function handleLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!username || !password) return showToast('error', 'Ошибка', 'Заполните все поля');
+    const users = getUsers();
+    const user = users.find(u => u.username === username && u.password === password);
+    if (!user) return showToast('error', 'Ошибка', 'Неверное имя или пароль');
+    setCurrentUser(user);
+    showToast('success', 'Добро пожаловать!', user.username);
+    checkAuth();
+  }
 
-        // ----- ОТРИСОВКА КАРТОЧЕК -----
-        function renderPlayers(filter = '') {
-            const query = filter.trim().toLowerCase();
-            let filtered = players;
+  function handleRegister() {
+    const username = document.getElementById('regUsername').value.trim();
+    const standoffId = document.getElementById('regStandoffId').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const confirm = document.getElementById('regPasswordConfirm').value;
+    if (!username || !standoffId || !password || !confirm) return showToast('error', 'Ошибка', 'Заполните все поля');
+    if (password !== confirm) return showToast('error', 'Ошибка', 'Пароли не совпадают');
+    if (password.length < 8) return showToast('error', 'Ошибка', 'Пароль минимум 8 символов');
+    if (!/^\d+$/.test(standoffId)) return showToast('error', 'Ошибка', 'ID только цифры');
+    const users = getUsers();
+    if (users.find(u => u.username === username)) return showToast('error', 'Ошибка', 'Имя занято');
+    if (users.find(u => u.standoffId === standoffId)) return showToast('error', 'Ошибка', 'ID уже используется');
+    const newUser = {
+      id: Date.now().toString(),
+      username,
+      standoffId,
+      password,
+      matches: 0,
+      kills: 0,
+      deaths: 0
+    };
+    users.push(newUser);
+    saveUsers(users);
+    setCurrentUser(newUser);
+    showToast('success', 'Регистрация успешна!', 'Добро пожаловать, ' + username);
+    checkAuth();
+  }
 
-            if (query !== '') {
-                // поиск по нику или по уровню (число)
-                filtered = players.filter(p => {
-                    const nameMatch = p.name.toLowerCase().includes(query);
-                    const levelMatch = String(p.level).includes(query);
-                    return nameMatch || levelMatch;
-                });
-            }
+  function handleLogout() {
+    clearCurrentUser();
+    showToast('info', 'Выход', 'Вы вышли из аккаунта');
+    setTimeout(() => location.reload(), 400);
+  }
 
-            // Сортируем по уровню (по убыванию) для красоты
-            filtered.sort((a, b) => b.level - a.level);
+  function showAuthForm(form) {
+    document.getElementById('loginForm').style.display = form === 'login' ? 'block' : 'none';
+    document.getElementById('registerForm').style.display = form === 'register' ? 'block' : 'none';
+  }
 
-            if (filtered.length === 0) {
-                grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:rgba(255,255,255,0.2);">Игроки не найдены</div>`;
-                return;
-            }
+  // ============================================================
+  // ОЧЕРЕДЬ
+  // ============================================================
+  function isInQueue(userId) {
+    return queue.some(p => p.id === userId);
+  }
 
-            let html = '';
-            filtered.forEach(p => {
-                const isInvited = lobby.includes(p.name);
-                const inviteClass = isInvited ? 'invited' : '';
-                const inviteText = isInvited ? '✅ В лобби' : '➕ Пригласить';
-                html += `
-                    <div class="player-card" data-name="${p.name}">
-                        <div class="avatar">${p.avatar}</div>
-                        <div class="name">${p.name}</div>
-                        <div class="level">Уровень ${p.level}</div>
-                        <div class="stats">
-                            <span>K/D <strong>${p.kd.toFixed(2)}</strong></span>
-                            <span>ВР <strong>${p.winrate}%</strong></span>
-                        </div>
-                        <button class="invite ${inviteClass}" data-name="${p.name}">${inviteText}</button>
-                    </div>
-                `;
-            });
+  function toggleQueue() {
+    const user = getCurrentUser();
+    if (!user) return showToast('error', 'Ошибка', 'Авторизуйтесь сначала');
+    if (currentMatch) return showToast('info', 'Идёт матч', 'Дождитесь окончания текущего матча');
 
-            grid.innerHTML = html;
+    if (isInQueue(user.id)) {
+      leaveQueue(user.id);
+    } else {
+      joinQueue(user);
+    }
+  }
 
-            // Навешиваем обработчики на кнопки "Пригласить"
-            document.querySelectorAll('.invite').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    const name = this.dataset.name;
-                    if (this.classList.contains('invited')) {
-                        // уже в лобби — убираем
-                        lobby = lobby.filter(n => n !== name);
-                    } else {
-                        // добавляем, если не больше 5
-                        if (lobby.length >= 5) {
-                            alert('Нельзя пригласить больше 5 игроков.');
-                            return;
-                        }
-                        if (!lobby.includes(name)) {
-                            lobby.push(name);
-                        }
-                    }
-                    updateLobbyStats();
-                    renderPlayers(searchInput.value); // перерисовываем с текущим фильтром
-                });
-            });
-        }
+  function joinQueue(user) {
+    if (queue.length >= 10) return showToast('error', 'Очередь полна', 'Подождите, пока начнётся матч');
+    if (isInQueue(user.id)) return;
+    queue.push({ id: user.id, username: user.username });
+    showToast('info', 'Вы в очереди', `${queue.length}/10`);
+    updateQueueUI();
+    if (queue.length === 10) {
+      startMatch();
+    }
+  }
 
-        // ----- ОБНОВЛЕНИЕ СТАТИСТИКИ ЛОББИ -----
-        function updateLobbyStats() {
-            lobbyCountEl.textContent = lobby.length;
-            if (lobby.length === 0) {
-                avgLevelEl.textContent = '—';
-                return;
-            }
-            // средний уровень приглашённых
-            const invitedPlayers = players.filter(p => lobby.includes(p.name));
-            const sum = invitedPlayers.reduce((acc, p) => acc + p.level, 0);
-            const avg = (sum / invitedPlayers.length).toFixed(1);
-            avgLevelEl.textContent = avg;
-        }
+  function leaveQueue(userId) {
+    queue = queue.filter(p => p.id !== userId);
+    showToast('info', 'Вы вышли из очереди', '');
+    updateQueueUI();
+  }
 
-        // ----- ОЧИСТКА ЛОББИ -----
-        function clearLobby() {
-            lobby = [];
-            updateLobbyStats();
-            renderPlayers(searchInput.value);
-        }
+  function updateQueueUI() {
+    const count = queue.length;
+    document.getElementById('queueCount').textContent = `${count}/10`;
+    const btn = document.getElementById('queueBtn');
+    const status = document.getElementById('queueStatusText');
+    const user = getCurrentUser();
+    if (user && isInQueue(user.id)) {
+      btn.innerHTML = '<i class="fas fa-times"></i> Выйти из очереди';
+      btn.className = 'btn-queue leave';
+      status.textContent = `Вы в очереди (${count}/10). Ожидайте...`;
+    } else {
+      btn.innerHTML = '<i class="fas fa-search"></i> Найти матч';
+      btn.className = 'btn-queue';
+      status.textContent = count === 0 ? 'Нажмите, чтобы начать поиск' : `Сейчас в очереди ${count}/10 игроков`;
+    }
+  }
 
-        // ----- ОБРАБОТЧИКИ ПОИСКА -----
-        function handleSearch() {
-            renderPlayers(searchInput.value);
-        }
+  // ============================================================
+  // МАТЧ
+  // ============================================================
+  function startMatch() {
+    // Перемешиваем очередь
+    const shuffled = [...queue];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    // Делим на две команды
+    const terrorists = shuffled.slice(0, 5);
+    const ct = shuffled.slice(5, 10);
+    currentMatch = { terrorists, ct };
+    queue = [];
 
-        searchBtn.addEventListener('click', handleSearch);
-        searchInput.addEventListener('input', handleSearch); // поиск в реальном времени
-        clearLobbyBtn.addEventListener('click', clearLobby);
+    // Показываем страницу матча
+    showPage('matchPage');
+    renderMatch();
+    showToast('success', 'Матч начался!', '10 игроков собраны, команды сформированы');
+  }
 
-        // ----- ИНИЦИАЛИЗАЦИЯ -----
-        renderPlayers('');
-        updateLobbyStats();
-    })();
+  function renderMatch() {
+    if (!currentMatch) return;
+    const tContainer = document.getElementById('teamTerrorists');
+    const ctContainer = document.getElementById('teamCT');
+
+    tContainer.innerHTML = currentMatch.terrorists.map(p => `
+      <div class="player-item">
+        <div class="player-avatar">${p.username.charAt(0).toUpperCase()}</div>
+        <span class="player-name">${p.username}</span>
+        <span class="player-status"><i class="fas fa-circle"></i> онлайн</span>
+      </div>
+    `).join('');
+
+    ctContainer.innerHTML = currentMatch.ct.map(p => `
+      <div class="player-item">
+        <div class="player-avatar">${p.username.charAt(0).toUpperCase()}</div>
+        <span class="player-name">${p.username}</span>
+        <span class="player-status"><i class="fas fa-circle"></i> онлайн</span>
+      </div>
+    `).join('');
+  }
+
+  function endMatch() {
+    if (!confirm('Завершить матч?')) return;
+    currentMatch = null;
+    showPage('mainPage');
+    updateQueueUI();
+    showToast('info', 'Матч завершён', 'Возврат в главное меню');
+  }
+
+  // ============================================================
+  // НАВИГАЦИЯ
+  // ============================================================
+  function showPage(pageId) {
+    document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+    document.getElementById(pageId).classList.add('active');
+    if (pageId === 'mainPage') {
+      updateQueueUI();
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function toggleCatalog() {
+    document.getElementById('catalogDropdown').classList.toggle('active');
+  }
+  document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('catalogDropdown');
+    if (!dropdown.contains(e.target)) dropdown.classList.remove('active');
+  });
+
+  // ============================================================
+  // ПРОФИЛЬ
+  // ============================================================
+  function updateProfileUI() {
+    const user = getCurrentUser();
+    if (!user) return;
+    document.getElementById('profileName').textContent = user.username;
+    document.getElementById('profileStandoffId').textContent = user.standoffId || '—';
+    document.getElementById('profileAvatar').textContent = user.username.charAt(0).toUpperCase();
+    document.getElementById('profileMatches').textContent = user.matches || 0;
+    document.getElementById('profileKills').textContent = user.kills || 0;
+    document.getElementById('profileDeaths').textContent = user.deaths || 0;
+    document.getElementById('settingsName').textContent = user.username;
+    document.getElementById('settingsStandoffId').textContent = user.standoffId || '—';
+  }
+
+  // ============================================================
+  // НАСТРОЙКИ
+  // ============================================================
+  function changeTheme(theme) {
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('faceit_theme', theme);
+  }
+  function changeLanguage(lang) {
+    localStorage.setItem('faceit_lang', lang);
+    // Меняем текст меню (можно расширить)
+  }
+  function loadSettings() {
+    const theme = localStorage.getItem('faceit_theme') || 'orange';
+    changeTheme(theme);
+    document.getElementById('themeSelect').value = theme;
+    const lang = localStorage.getItem('faceit_lang') || 'ru';
+    document.getElementById('languageSelect').value = lang;
+  }
+  function saveSettings() {
+    changeTheme(document.getElementById('themeSelect').value);
+    changeLanguage(document.getElementById('languageSelect').value);
+    showToast('success', 'Настройки сохранены', 'Тема и язык обновлены');
+  }
+
+  // ============================================================
+  // TOAST
+  // ============================================================
+  function showToast(type, title, text) {
+    const toast = document.getElementById('toast');
+    const titleEl = document.getElementById('toastTitle');
+    const textEl = document.getElementById('toastText');
+    titleEl.className = 'toast-title ' + type;
+    titleEl.textContent = title;
+    textEl.textContent = text;
+    toast.classList.add('visible');
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => toast.classList.remove('visible'), 4000);
+  }
+
+  // ============================================================
+  // ПРОВЕРКА АВТОРИЗАЦИИ
+  // ============================================================
+  function checkAuth() {
+    const user = getCurrentUser();
+    if (user) {
+      document.getElementById('authPage').style.display = 'none';
+      document.getElementById('mainSite').classList.add('visible');
+      document.getElementById('header').style.display = 'block';
+      updateProfileUI();
+      loadSettings();
+      updateQueueUI();
+      // Если есть активный матч (при перезагрузке он сбросится)
+      if (currentMatch) {
+        showPage('matchPage');
+        renderMatch();
+      } else {
+        showPage('mainPage');
+      }
+    } else {
+      document.getElementById('authPage').style.display = 'flex';
+      document.getElementById('mainSite').classList.remove('visible');
+      document.getElementById('header').style.display = 'none';
+    }
+  }
+
+  // ============================================================
+  // ЗАПУСК
+  // ============================================================
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+    document.getElementById('registerBtn').addEventListener('click', handleRegister);
+    document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        const login = document.getElementById('loginForm');
+        const register = document.getElementById('registerForm');
+        if (login.style.display !== 'none') handleLogin();
+        else if (register.style.display !== 'none') handleRegister();
+      }
+    });
+
+    // Сохраняем пользователей при загрузке (если нет ни одного, создаём тестового)
+    let users = getUsers();
+    if (users.length === 0) {
+      users = [
+        { id: '1', username: 'Admin', standoffId: '123', password: 'admin123', matches: 0, kills: 0, deaths: 0 },
+        { id: '2', username: 'Player1', standoffId: '456', password: 'player123', matches: 0, kills: 0, deaths: 0 }
+      ];
+      saveUsers(users);
+    }
+
+    checkAuth();
+
+    // Авто-обновление очереди (если она меняется извне, но у нас всё в памяти)
+    setInterval(() => {
+      if (!currentMatch) {
+        updateQueueUI();
+      }
+    }, 5000);
+  });
 </script>
-
 </body>
 </html>
