@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CRAVN — минималистичный киберспорт</title>
+    <title>Faceit — поиск игроков 5x5</title>
     <style>
         /* ----- СБРОС И ШРИФТЫ ----- */
         * {
@@ -16,8 +16,8 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #080a0f;
-            color: #f0f4ff;
+            background: #0b0e14;
+            color: #eef2ff;
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -26,132 +26,97 @@
             line-height: 1.5;
         }
 
-        /* ----- КОНТЕЙНЕР С МИНИМАЛИСТИЧНЫМ ФОНОМ (CSS) ----- */
+        /* ----- КОНТЕЙНЕР ----- */
         .container {
             position: relative;
-            max-width: 1120px;
+            max-width: 1200px;
             width: 100%;
-            background: rgba(12, 16, 28, 0.65);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-radius: 48px;
-            padding: 36px 40px 40px;
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            background: rgba(14, 18, 30, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 40px;
+            padding: 32px 36px 36px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.04);
-            overflow: hidden;
             z-index: 1;
-            transition: box-shadow 0.4s;
         }
 
-        /* ----- ДЕКОРАТИВНЫЙ CSS-ФОН (геометрия + градиенты) ----- */
+        /* ----- ДЕКОРАТИВНЫЙ ФОН (CSS-графика) ----- */
         .bg-art {
             position: absolute;
             inset: 0;
             z-index: 0;
             pointer-events: none;
             overflow: hidden;
-            border-radius: 48px;
+            border-radius: 40px;
         }
 
-        /* Основной градиентный слой */
         .bg-art::before {
             content: '';
             position: absolute;
             inset: 0;
             background:
-                radial-gradient(ellipse 70% 60% at 20% 80%, rgba(88, 130, 255, 0.12) 0%, transparent 80%),
-                radial-gradient(ellipse 50% 50% at 80% 20%, rgba(0, 230, 255, 0.08) 0%, transparent 70%),
-                radial-gradient(ellipse 40% 40% at 60% 70%, rgba(120, 80, 255, 0.06) 0%, transparent 60%);
-            z-index: 0;
-        }
-
-        /* Абстрактные геометрические фигуры (pure CSS) */
-        .bg-shapes {
-            position: absolute;
-            inset: 0;
-            z-index: 0;
+                radial-gradient(ellipse 70% 60% at 20% 80%, rgba(88, 130, 255, 0.10) 0%, transparent 80%),
+                radial-gradient(ellipse 50% 50% at 80% 20%, rgba(0, 230, 255, 0.06) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 40% at 60% 70%, rgba(120, 80, 255, 0.05) 0%, transparent 60%);
         }
 
         .shape {
             position: absolute;
             border-radius: 50%;
-            opacity: 0.3;
+            opacity: 0.2;
             filter: blur(80px);
-            transition: all 8s ease-in-out;
         }
-
         .shape--1 {
             width: 500px;
             height: 500px;
-            background: radial-gradient(circle, rgba(0, 180, 255, 0.15), transparent 70%);
+            background: radial-gradient(circle, rgba(0, 180, 255, 0.12), transparent 70%);
             top: -150px;
             right: -100px;
-            animation: floatShape 18s infinite alternate ease-in-out;
+            animation: float 18s infinite alternate ease-in-out;
         }
-
         .shape--2 {
             width: 400px;
             height: 400px;
-            background: radial-gradient(circle, rgba(120, 80, 255, 0.12), transparent 70%);
+            background: radial-gradient(circle, rgba(120, 80, 255, 0.10), transparent 70%);
             bottom: -120px;
             left: -80px;
-            animation: floatShape 22s infinite alternate-reverse ease-in-out;
+            animation: float 22s infinite alternate-reverse ease-in-out;
         }
 
-        .shape--3 {
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(0, 230, 200, 0.08), transparent 70%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            animation: floatShape 26s infinite alternate ease-in-out;
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, -20px) scale(1.05); }
         }
 
-        /* Тонкая сетка (линии) */
-        .grid-lines {
-            position: absolute;
-            inset: 0;
-            z-index: 0;
-            background-image:
-                linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
-            background-size: 60px 60px;
-            mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
-            -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
-        }
-
-        @keyframes floatShape {
-            0% {
-                transform: translate(0, 0) scale(1);
-            }
-            100% {
-                transform: translate(30px, -20px) scale(1.1);
-            }
-        }
-
-        /* ----- ШАПКА (минималистичная) ----- */
+        /* ----- ШАПКА ----- */
         .header {
             position: relative;
             z-index: 2;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
             flex-wrap: wrap;
             gap: 16px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
         }
 
         .logo {
-            font-weight: 700;
+            font-weight: 800;
             font-size: 28px;
             letter-spacing: -0.5px;
-            background: linear-gradient(135deg, #f0f4ff 0%, #8ab4ff 100%);
+            background: linear-gradient(135deg, #f0f4ff, #5882ff);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            text-shadow: 0 0 30px rgba(88, 130, 255, 0.15);
+        }
+        .logo span {
+            font-weight: 400;
+            font-size: 16px;
+            background: none;
+            -webkit-text-fill-color: rgba(255,255,255,0.3);
+            margin-left: 6px;
         }
 
         .nav {
@@ -159,16 +124,13 @@
             gap: 28px;
             font-size: 14px;
             font-weight: 500;
-            letter-spacing: 0.3px;
         }
-
         .nav a {
-            color: rgba(255, 255, 255, 0.55);
+            color: rgba(255, 255, 255, 0.5);
             text-decoration: none;
-            transition: color 0.3s, transform 0.2s;
+            transition: color 0.3s;
             position: relative;
         }
-
         .nav a::after {
             content: '';
             position: absolute;
@@ -177,475 +139,453 @@
             width: 0;
             height: 2px;
             background: linear-gradient(90deg, #5882ff, #00e6ff);
-            transition: width 0.3s ease;
+            transition: width 0.3s;
         }
-
         .nav a:hover {
             color: #fff;
         }
-
         .nav a:hover::after {
             width: 100%;
         }
 
-        /* ----- ГЕРОЙ ----- */
-        .hero {
+        /* ----- ПОИСКОВАЯ СЕКЦИЯ ----- */
+        .search-section {
             position: relative;
             z-index: 2;
-            margin: 32px 0 28px;
+            margin: 28px 0 32px;
         }
 
-        .hero-sub {
-            font-size: 14px;
-            font-weight: 500;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.3);
-            margin-bottom: 4px;
-        }
-
-        .hero-title {
-            font-size: 72px;
-            font-weight: 800;
-            letter-spacing: -2px;
-            line-height: 1;
-            background: linear-gradient(to right, #f0f4ff, #8ab4ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-shadow: 0 0 60px rgba(88, 130, 255, 0.1);
-        }
-
-        /* ----- О НАС + СТАТИСТИКА (стекло) ----- */
-        .about {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-radius: 32px;
-            padding: 18px 32px;
-            margin: 32px 0 40px;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-        }
-
-        .about-title {
-            font-weight: 600;
-            font-size: 20px;
-            letter-spacing: 0.5px;
-            color: #fff;
-        }
-
-        .stats {
-            display: flex;
-            gap: 44px;
-            flex-wrap: wrap;
-        }
-
-        .stat-item {
-            text-align: center;
-        }
-
-        .stat-number {
+        .search-title {
+            font-size: 28px;
             font-weight: 700;
-            font-size: 30px;
             letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+        .search-title small {
+            font-weight: 400;
+            font-size: 16px;
+            color: rgba(255,255,255,0.3);
+            margin-left: 10px;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 14px 20px;
+            border-radius: 60px;
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.04);
             color: #fff;
-            line-height: 1.2;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            backdrop-filter: blur(4px);
+        }
+        .search-input::placeholder {
+            color: rgba(255,255,255,0.25);
+            font-weight: 400;
+        }
+        .search-input:focus {
+            border-color: rgba(88, 130, 255, 0.5);
+            box-shadow: 0 0 0 4px rgba(88, 130, 255, 0.08);
         }
 
-        .stat-number.green {
-            background: linear-gradient(135deg, #00e6ff, #5882ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        .search-btn {
+            padding: 14px 32px;
+            border-radius: 60px;
+            border: none;
+            background: linear-gradient(135deg, #5882ff, #3b5fd9);
+            color: #fff;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.3s;
+            box-shadow: 0 8px 24px rgba(88, 130, 255, 0.2);
+        }
+        .search-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 12px 32px rgba(88, 130, 255, 0.3);
         }
 
-        .stat-label {
-            font-size: 11px;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: rgba(255, 255, 255, 0.3);
-            margin-top: 2px;
-        }
-
-        /* ----- СОСТАВ (минималистичные карточки) ----- */
-        .roster-title {
+        /* ----- СТАТИСТИКА ЛОББИ (сбор команды) ----- */
+        .lobby-stats {
             position: relative;
             z-index: 2;
-            font-weight: 600;
-            font-size: 22px;
-            letter-spacing: 0.5px;
-            color: #fff;
-            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
+            background: rgba(255,255,255,0.03);
+            border-radius: 30px;
+            padding: 14px 28px;
+            margin-bottom: 28px;
+            border: 1px solid rgba(255,255,255,0.04);
+            backdrop-filter: blur(8px);
         }
 
-        .roster-grid {
+        .lobby-stats span {
+            font-weight: 500;
+            color: rgba(255,255,255,0.5);
+        }
+        .lobby-stats .count {
+            font-weight: 700;
+            font-size: 22px;
+            color: #fff;
+            margin-right: 4px;
+        }
+        .lobby-stats .highlight {
+            color: #5882ff;
+        }
+        .lobby-stats .invite-btn {
+            margin-left: auto;
+            padding: 8px 24px;
+            border-radius: 40px;
+            border: 1px solid rgba(88, 130, 255, 0.3);
+            background: transparent;
+            color: #5882ff;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .lobby-stats .invite-btn:hover {
+            background: rgba(88, 130, 255, 0.1);
+            border-color: #5882ff;
+        }
+
+        /* ----- СЕТКА ИГРОКОВ ----- */
+        .players-grid {
             position: relative;
             z-index: 2;
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 14px;
-            margin-bottom: 44px;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 8px;
         }
 
         .player-card {
-            background: rgba(255, 255, 255, 0.02);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-radius: 20px;
-            padding: 20px 8px 18px;
+            background: rgba(255,255,255,0.02);
+            backdrop-filter: blur(6px);
+            border-radius: 24px;
+            padding: 20px 14px 16px;
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255,255,255,0.03);
             transition: all 0.3s ease;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
         }
-
         .player-card:hover {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(88, 130, 255, 0.2);
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(88, 130, 255, 0.15);
             transform: translateY(-4px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
         }
-
-        .player-name {
+        .player-card .avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #2a2f44, #1b1f2e);
+            margin: 0 auto 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.05);
+        }
+        .player-card .name {
             font-weight: 600;
-            font-size: 16px;
+            font-size: 17px;
             color: #fff;
             letter-spacing: 0.2px;
         }
-
-        .player-role {
-            font-size: 11px;
+        .player-card .level {
+            font-size: 13px;
             font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: rgba(255, 255, 255, 0.25);
-            margin: 2px 0 10px;
+            color: #5882ff;
+            margin: 4px 0 10px;
+            background: rgba(88,130,255,0.12);
+            display: inline-block;
+            padding: 2px 14px;
+            border-radius: 20px;
+        }
+        .player-card .stats {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 12px;
+        }
+        .player-card .stats strong {
+            color: #fff;
+            font-weight: 600;
+        }
+        .player-card .invite {
+            padding: 6px 20px;
+            border-radius: 40px;
+            border: none;
+            background: rgba(88,130,255,0.15);
+            color: #5882ff;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .player-card .invite:hover {
+            background: rgba(88,130,255,0.25);
+        }
+        .player-card .invite.invited {
+            background: rgba(0,230,200,0.15);
+            color: #00e6c8;
+            cursor: default;
         }
 
-        .player-kd {
-            font-weight: 700;
-            font-size: 28px;
-            letter-spacing: -0.5px;
-            background: linear-gradient(135deg, #00e6ff, #5882ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            line-height: 1;
-        }
-
-        .player-kd-label {
-            font-size: 10px;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: rgba(255, 255, 255, 0.2);
-            margin-top: 2px;
-        }
-
-        /* ----- СОЦИАЛЬНЫЕ СЕТИ ----- */
-        .socials {
+        /* ----- ПОДВАЛ (соцсети) ----- */
+        .footer {
             position: relative;
             z-index: 2;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.04);
             display: flex;
             justify-content: space-between;
-            align-items: center;
             flex-wrap: wrap;
-            gap: 20px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.04);
-        }
-
-        .socials-label {
-            font-weight: 500;
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.5);
-            letter-spacing: 0.3px;
-        }
-
-        .social-links {
-            display: flex;
-            gap: 32px;
-            flex-wrap: wrap;
-        }
-
-        .social-link {
-            display: flex;
+            gap: 16px;
             align-items: center;
-            gap: 8px;
-            color: rgba(255, 255, 255, 0.4);
+        }
+        .footer .copy {
+            font-size: 13px;
+            color: rgba(255,255,255,0.2);
+        }
+        .footer .links {
+            display: flex;
+            gap: 24px;
+        }
+        .footer .links a {
+            color: rgba(255,255,255,0.3);
             text-decoration: none;
             font-size: 14px;
-            font-weight: 500;
             transition: color 0.3s;
         }
-
-        .social-link:hover {
+        .footer .links a:hover {
             color: #fff;
         }
 
-        .social-link .icon {
-            font-size: 18px;
-            line-height: 1;
-        }
-
-        .social-link .handle {
-            color: rgba(255, 255, 255, 0.2);
-            font-weight: 400;
-            margin-left: 2px;
-        }
-
-        /* ----- АДАПТИВНОСТЬ ----- */
-        @media (max-width: 1024px) {
-            .roster-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-            .hero-title {
-                font-size: 56px;
-            }
-        }
-
+        /* ----- АДАПТИВ ----- */
         @media (max-width: 820px) {
-            .container {
-                padding: 24px 24px 30px;
-                border-radius: 36px;
-            }
-            .bg-art {
-                border-radius: 36px;
-            }
-            .stats {
-                gap: 28px;
-            }
-            .hero-title {
-                font-size: 44px;
-            }
+            .container { padding: 24px 20px; }
+            .search-title { font-size: 22px; }
+            .lobby-stats { flex-direction: column; align-items: stretch; gap: 12px; }
+            .lobby-stats .invite-btn { margin-left: 0; }
         }
-
-        @media (max-width: 620px) {
-            .header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .nav {
-                gap: 16px;
-                font-size: 13px;
-                flex-wrap: wrap;
-            }
-            .hero-title {
-                font-size: 34px;
-                letter-spacing: -1px;
-            }
-            .hero-sub {
-                font-size: 12px;
-                letter-spacing: 3px;
-            }
-            .about {
-                flex-direction: column;
-                align-items: flex-start;
-                padding: 16px 20px;
-            }
-            .stats {
-                gap: 20px;
-                width: 100%;
-                justify-content: space-between;
-            }
-            .stat-number {
-                font-size: 24px;
-            }
-            .roster-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
-            .player-name {
-                font-size: 14px;
-            }
-            .player-kd {
-                font-size: 22px;
-            }
-            .socials {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .social-links {
-                gap: 20px;
-            }
-            .container {
-                padding: 18px 16px 24px;
-                border-radius: 28px;
-            }
-            .bg-art {
-                border-radius: 28px;
-            }
-            .shape--1 {
-                width: 300px;
-                height: 300px;
-                top: -80px;
-                right: -60px;
-            }
-            .shape--2 {
-                width: 250px;
-                height: 250px;
-                bottom: -60px;
-                left: -40px;
-            }
+        @media (max-width: 540px) {
+            .header { flex-direction: column; align-items: flex-start; }
+            .nav { gap: 16px; font-size: 13px; flex-wrap: wrap; }
+            .search-title { font-size: 20px; }
+            .search-bar { flex-direction: column; }
+            .search-btn { width: 100%; }
+            .players-grid { grid-template-columns: repeat(2, 1fr); }
         }
-
-        @media (max-width: 420px) {
-            .hero-title {
-                font-size: 28px;
-            }
-            .roster-grid {
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
-            }
-            .player-card {
-                padding: 14px 4px 12px;
-            }
-            .player-name {
-                font-size: 12px;
-            }
-            .player-kd {
-                font-size: 20px;
-            }
-            .stat-number {
-                font-size: 20px;
-            }
-            .stats {
-                gap: 12px;
-            }
-            .nav {
-                gap: 10px;
-                font-size: 11px;
-            }
+        @media (max-width: 400px) {
+            .players-grid { grid-template-columns: 1fr; }
+            .container { padding: 16px; }
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
+<div class="container">
 
-        <!-- CSS-ФОН (декоративный) -->
-        <div class="bg-art">
-            <div class="bg-shapes">
-                <div class="shape shape--1"></div>
-                <div class="shape shape--2"></div>
-                <div class="shape shape--3"></div>
-            </div>
-            <div class="grid-lines"></div>
-        </div>
-
-        <!-- ШАПКА -->
-        <header class="header">
-            <div class="logo">CRAVN</div>
-            <nav class="nav">
-                <a href="#">Главная</a>
-                <a href="#">Состав</a>
-                <a href="#">Статистика</a>
-                <a href="#">Достижения</a>
-                <a href="#">Новости</a>
-                <a href="#">Контакты</a>
-            </nav>
-        </header>
-
-        <!-- ГЕРОЙ -->
-        <div class="hero">
-            <div class="hero-sub">Professional Standoff 2 Team</div>
-            <div class="hero-title">CRAVN</div>
-        </div>
-
-        <!-- О НАС + СТАТИСТИКА -->
-        <div class="about">
-            <div class="about-title">О нас</div>
-            <div class="stats">
-                <div class="stat-item">
-                    <div class="stat-number">33</div>
-                    <div class="stat-label">Победы</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">0</div>
-                    <div class="stat-label">Поражения</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number green">100%</div>
-                    <div class="stat-label">Винрейт</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">33</div>
-                    <div class="stat-label">Сыграно матчей</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- СОСТАВ -->
-        <div class="roster-title">Состав команды</div>
-
-        <div class="roster-grid">
-            <div class="player-card">
-                <div class="player-name">КЛ1Р</div>
-                <div class="player-role">Игрок</div>
-                <div class="player-kd">2.50</div>
-                <div class="player-kd-label">К/Д</div>
-            </div>
-            <div class="player-card">
-                <div class="player-name">CRAVANILIS</div>
-                <div class="player-role">Игрок</div>
-                <div class="player-kd">2.50</div>
-                <div class="player-kd-label">К/Д</div>
-            </div>
-            <div class="player-card">
-                <div class="player-name">GLAVICIUS</div>
-                <div class="player-role">Игрок</div>
-                <div class="player-kd">2.50</div>
-                <div class="player-kd-label">К/Д</div>
-            </div>
-            <div class="player-card">
-                <div class="player-name">G1NUX 52</div>
-                <div class="player-role">Игрок</div>
-                <div class="player-kd">2.50</div>
-                <div class="player-kd-label">К/Д</div>
-            </div>
-            <div class="player-card">
-                <div class="player-name">KLINXXX</div>
-                <div class="player-role">Игрок</div>
-                <div class="player-kd">2.50</div>
-                <div class="player-kd-label">К/Д</div>
-            </div>
-            <div class="player-card">
-                <div class="player-name">SICH1</div>
-                <div class="player-role">Игрок</div>
-                <div class="player-kd">2.50</div>
-                <div class="player-kd-label">К/Д</div>
-            </div>
-        </div>
-
-        <!-- СОЦИАЛЬНЫЕ СЕТИ -->
-        <div class="socials">
-            <div class="socials-label">Наши соцсети</div>
-            <div class="social-links">
-                <a href="#" class="social-link">
-                    <span class="icon">📱</span> Telegram
-                    <span class="handle">t.me/CRAVNkomanda</span>
-                </a>
-                <a href="#" class="social-link">
-                    <span class="icon">🎵</span> TikTok
-                    <span class="handle">@cravanilis</span>
-                </a>
-                <a href="#" class="social-link">
-                    <span class="icon">▶️</span> YouTube
-                    <span class="handle">@CRAVN1</span>
-                </a>
-            </div>
-        </div>
-
+    <!-- Декоративный фон -->
+    <div class="bg-art">
+        <div class="shape shape--1"></div>
+        <div class="shape shape--2"></div>
     </div>
+
+    <!-- Шапка -->
+    <header class="header">
+        <div class="logo">Faceit <span>| поиск 5x5</span></div>
+        <nav class="nav">
+            <a href="#">Игроки</a>
+            <a href="#">Лобби</a>
+            <a href="#">Рейтинг</a>
+            <a href="#">Матчи</a>
+        </nav>
+    </header>
+
+    <!-- Поиск -->
+    <div class="search-section">
+        <div class="search-title">
+            Найди тиммейтов <small>для игры 5 на 5</small>
+        </div>
+        <div class="search-bar">
+            <input type="text" class="search-input" id="searchInput" placeholder="Поиск по нику или уровню (1–10)" />
+            <button class="search-btn" id="searchBtn">🔍 Найти</button>
+        </div>
+    </div>
+
+    <!-- Статистика лобби -->
+    <div class="lobby-stats" id="lobbyStats">
+        <span>👥 В лобби: <span class="count" id="lobbyCount">0</span> / 5</span>
+        <span>⭐ Уровень команды: <span class="highlight" id="avgLevel">—</span></span>
+        <button class="invite-btn" id="clearLobbyBtn">Очистить лобби</button>
+    </div>
+
+    <!-- Сетка игроков -->
+    <div class="players-grid" id="playersGrid"></div>
+
+    <!-- Подвал -->
+    <div class="footer">
+        <div class="copy">© 2026 Faceit-подобный тест</div>
+        <div class="links">
+            <a href="#">Telegram</a>
+            <a href="#">Discord</a>
+            <a href="#">YouTube</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ----- ДАННЫЕ (статичные, без переменных) -----
+        const players = [
+            { name: 's1mple', level: 10, kd: 1.45, winrate: 68, avatar: 'S' },
+            { name: 'NiKo', level: 9, kd: 1.32, winrate: 62, avatar: 'N' },
+            { name: 'ZywOo', level: 10, kd: 1.50, winrate: 71, avatar: 'Z' },
+            { name: 'dev1ce', level: 8, kd: 1.28, winrate: 59, avatar: 'D' },
+            { name: 'electronic', level: 7, kd: 1.20, winrate: 55, avatar: 'E' },
+            { name: 'dupreeh', level: 8, kd: 1.19, winrate: 58, avatar: 'D' },
+            { name: 'flamie', level: 6, kd: 1.12, winrate: 50, avatar: 'F' },
+            { name: 'GuardiaN', level: 7, kd: 1.22, winrate: 52, avatar: 'G' },
+            { name: 'olofmeister', level: 9, kd: 1.30, winrate: 64, avatar: 'O' },
+            { name: 'JW', level: 6, kd: 1.15, winrate: 47, avatar: 'J' },
+            { name: 'karrigan', level: 8, kd: 1.10, winrate: 60, avatar: 'K' },
+            { name: 'rain', level: 7, kd: 1.18, winrate: 53, avatar: 'R' },
+            { name: 'shox', level: 8, kd: 1.21, winrate: 57, avatar: 'S' },
+            { name: 'kennyS', level: 9, kd: 1.33, winrate: 65, avatar: 'K' },
+            { name: 'apEX', level: 7, kd: 1.17, winrate: 54, avatar: 'A' }
+        ];
+
+        // ----- СОСТОЯНИЕ ЛОББИ -----
+        let lobby = []; // массив ников приглашённых
+
+        // DOM-элементы
+        const grid = document.getElementById('playersGrid');
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const lobbyCountEl = document.getElementById('lobbyCount');
+        const avgLevelEl = document.getElementById('avgLevel');
+        const clearLobbyBtn = document.getElementById('clearLobbyBtn');
+
+        // ----- ОТРИСОВКА КАРТОЧЕК -----
+        function renderPlayers(filter = '') {
+            const query = filter.trim().toLowerCase();
+            let filtered = players;
+
+            if (query !== '') {
+                // поиск по нику или по уровню (число)
+                filtered = players.filter(p => {
+                    const nameMatch = p.name.toLowerCase().includes(query);
+                    const levelMatch = String(p.level).includes(query);
+                    return nameMatch || levelMatch;
+                });
+            }
+
+            // Сортируем по уровню (по убыванию) для красоты
+            filtered.sort((a, b) => b.level - a.level);
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:rgba(255,255,255,0.2);">Игроки не найдены</div>`;
+                return;
+            }
+
+            let html = '';
+            filtered.forEach(p => {
+                const isInvited = lobby.includes(p.name);
+                const inviteClass = isInvited ? 'invited' : '';
+                const inviteText = isInvited ? '✅ В лобби' : '➕ Пригласить';
+                html += `
+                    <div class="player-card" data-name="${p.name}">
+                        <div class="avatar">${p.avatar}</div>
+                        <div class="name">${p.name}</div>
+                        <div class="level">Уровень ${p.level}</div>
+                        <div class="stats">
+                            <span>K/D <strong>${p.kd.toFixed(2)}</strong></span>
+                            <span>ВР <strong>${p.winrate}%</strong></span>
+                        </div>
+                        <button class="invite ${inviteClass}" data-name="${p.name}">${inviteText}</button>
+                    </div>
+                `;
+            });
+
+            grid.innerHTML = html;
+
+            // Навешиваем обработчики на кнопки "Пригласить"
+            document.querySelectorAll('.invite').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const name = this.dataset.name;
+                    if (this.classList.contains('invited')) {
+                        // уже в лобби — убираем
+                        lobby = lobby.filter(n => n !== name);
+                    } else {
+                        // добавляем, если не больше 5
+                        if (lobby.length >= 5) {
+                            alert('Нельзя пригласить больше 5 игроков.');
+                            return;
+                        }
+                        if (!lobby.includes(name)) {
+                            lobby.push(name);
+                        }
+                    }
+                    updateLobbyStats();
+                    renderPlayers(searchInput.value); // перерисовываем с текущим фильтром
+                });
+            });
+        }
+
+        // ----- ОБНОВЛЕНИЕ СТАТИСТИКИ ЛОББИ -----
+        function updateLobbyStats() {
+            lobbyCountEl.textContent = lobby.length;
+            if (lobby.length === 0) {
+                avgLevelEl.textContent = '—';
+                return;
+            }
+            // средний уровень приглашённых
+            const invitedPlayers = players.filter(p => lobby.includes(p.name));
+            const sum = invitedPlayers.reduce((acc, p) => acc + p.level, 0);
+            const avg = (sum / invitedPlayers.length).toFixed(1);
+            avgLevelEl.textContent = avg;
+        }
+
+        // ----- ОЧИСТКА ЛОББИ -----
+        function clearLobby() {
+            lobby = [];
+            updateLobbyStats();
+            renderPlayers(searchInput.value);
+        }
+
+        // ----- ОБРАБОТЧИКИ ПОИСКА -----
+        function handleSearch() {
+            renderPlayers(searchInput.value);
+        }
+
+        searchBtn.addEventListener('click', handleSearch);
+        searchInput.addEventListener('input', handleSearch); // поиск в реальном времени
+        clearLobbyBtn.addEventListener('click', clearLobby);
+
+        // ----- ИНИЦИАЛИЗАЦИЯ -----
+        renderPlayers('');
+        updateLobbyStats();
+    })();
+</script>
 
 </body>
 </html>
