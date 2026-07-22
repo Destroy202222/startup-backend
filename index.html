@@ -205,15 +205,42 @@
     }
     .page-content .sub-title { color:var(--text-secondary); font-size:1rem; margin-bottom:2rem; font-weight:500; }
 
-    /* ===== ГЛАВНАЯ СТРАНИЦА ===== */
+    /* ===== ГЛАВНАЯ СТРАНИЦА (без очереди) ===== */
     .hero-center {
       max-width:700px; margin:0 auto; text-align:center;
     }
+    .hero-center h2 {
+      font-size:2.2rem; font-weight:900;
+      background:linear-gradient(45deg,var(--gradient-start),var(--gradient-end));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      margin-bottom:1rem;
+    }
+    .hero-center p {
+      color:var(--text-secondary); font-size:1.1rem; line-height:1.6;
+      max-width:600px; margin:0 auto;
+    }
+    .info-features {
+      display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1.5rem;
+      margin-top:2rem;
+    }
+    .feature-card {
+      background:var(--bg-card); backdrop-filter:blur(8px);
+      border-radius:16px; padding:1.5rem;
+      border:1px solid var(--border-color);
+      text-align:center; transition:.3s;
+    }
+    .feature-card:hover { border-color:var(--primary); transform:translateY(-3px); }
+    .feature-card .icon { font-size:2rem; color:var(--primary); margin-bottom:.5rem; }
+    .feature-card h3 { color:var(--text-primary); font-weight:700; }
+    .feature-card p { color:var(--text-secondary); font-size:.85rem; margin-top:.3rem; font-weight:500; }
+
+    /* ===== СТРАНИЦА ПОИСКА МАТЧА (очередь) ===== */
     .queue-status {
       background:var(--bg-card); backdrop-filter:blur(8px);
       border-radius:24px; padding:2.5rem;
       border:1px solid var(--border-color);
       margin-bottom:2rem;
+      max-width:600px; margin-left:auto; margin-right:auto;
     }
     .queue-status .count {
       font-size:4rem; font-weight:900;
@@ -245,27 +272,10 @@
     .btn-queue.leave { background:#ff6b6b; color:#fff; box-shadow:0 0 20px rgba(255,0,0,0.3); }
     .btn-queue.leave:hover { background:#ff4444; }
     .btn-queue:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
-    .btn-queue.start { background:#2b8a3e; color:#fff; box-shadow:0 0 20px rgba(43,138,62,0.3); }
-    .btn-queue.start:hover { background:#40c057; }
 
     .queue-status .status-text {
       color:var(--text-muted); font-size:.9rem; margin-top:.5rem;
     }
-
-    .info-features {
-      display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1.5rem;
-      margin-top:2rem;
-    }
-    .feature-card {
-      background:var(--bg-card); backdrop-filter:blur(8px);
-      border-radius:16px; padding:1.5rem;
-      border:1px solid var(--border-color);
-      text-align:center; transition:.3s;
-    }
-    .feature-card:hover { border-color:var(--primary); transform:translateY(-3px); }
-    .feature-card .icon { font-size:2rem; color:var(--primary); margin-bottom:.5rem; }
-    .feature-card h3 { color:var(--text-primary); font-weight:700; }
-    .feature-card p { color:var(--text-secondary); font-size:.85rem; margin-top:.3rem; font-weight:500; }
 
     /* ===== СТРАНИЦА МАТЧА ===== */
     .match-grid {
@@ -491,14 +501,15 @@
             <button class="dropdown-btn" onclick="toggleCatalog()"><i class="fas fa-bars"></i> Меню <i class="fas fa-chevron-down" style="font-size:.7rem;"></i></button>
             <div class="dropdown-content">
               <a href="#" onclick="showPage('mainPage'); toggleCatalog(); return false;"><i class="fas fa-home"></i> Главная</a>
+              <a href="#" onclick="showPage('matchSearchPage'); toggleCatalog(); return false;"><i class="fas fa-search"></i> Поиск матча</a>
               <a href="#" onclick="showPage('profilePage'); toggleCatalog(); return false;"><i class="fas fa-user"></i> Мой профиль</a>
-              <a href="#" onclick="showPage('searchPage'); toggleCatalog(); return false;"><i class="fas fa-search"></i> Поиск игроков</a>
+              <a href="#" onclick="showPage('searchPlayersPage'); toggleCatalog(); return false;"><i class="fas fa-users"></i> Поиск игроков</a>
               <a href="#" onclick="showPage('settingsPage'); toggleCatalog(); return false;"><i class="fas fa-cog"></i> Настройки</a>
               <div class="divider"></div>
               <a href="#" onclick="handleLogout(); toggleCatalog(); return false;" style="color:#ff6b6b;"><i class="fas fa-sign-out-alt"></i> Выйти</a>
             </div>
           </div>
-          <a href="#" class="btn-connect" onclick="showPage('mainPage'); return false;"><i class="fas fa-gamepad"></i> Играть</a>
+          <a href="#" class="btn-connect" onclick="showPage('matchSearchPage'); return false;"><i class="fas fa-gamepad"></i> Играть</a>
         </div>
       </div>
     </header>
@@ -506,30 +517,34 @@
     <!-- ===== ГЛАВНАЯ ===== -->
     <div class="page-content active" id="mainPage">
       <div class="hero-center">
-        <div class="queue-status">
-          <div class="count" id="queueCount">0/10</div>
-          <div class="label">Игроков в очереди</div>
-          <div class="queue-actions">
-            <div class="btn-row">
-              <button class="btn-queue start" id="forceStartBtn" onclick="forceStartMatch()">
-                <i class="fas fa-play"></i> Начать матч
-              </button>
-              <button class="btn-queue leave" id="leaveQueueBtn" onclick="leaveQueueCurrent()" style="display:none;">
-                <i class="fas fa-times"></i> Выйти из очереди
-              </button>
-            </div>
-            <button class="btn-queue" id="queueBtn" onclick="toggleQueue()">
-              <i class="fas fa-search"></i> Найти матч
-            </button>
-          </div>
-          <div class="status-text" id="queueStatusText">Нажмите «Найти матч», чтобы присоединиться к очереди</div>
-        </div>
-
+        <h2>Добро пожаловать в Faceit 5x5!</h2>
+        <p>Здесь вы можете найти матч по Standoff 2 в формате 5×5. Перейдите в раздел <strong>«Поиск матча»</strong>, чтобы присоединиться к очереди и начать игру.</p>
         <div class="info-features">
           <div class="feature-card"><div class="icon"><i class="fas fa-users"></i></div><h3>5×5 Матчи</h3><p>Собирайте команду из 10 игроков и играйте</p></div>
           <div class="feature-card"><div class="icon"><i class="fas fa-shield-alt"></i></div><h3>Честная игра</h3><p>Случайное распределение по командам</p></div>
           <div class="feature-card"><div class="icon"><i class="fas fa-clock"></i></div><h3>Быстрый поиск</h3><p>Как только наберётся 10 человек — матч начинается</p></div>
         </div>
+      </div>
+    </div>
+
+    <!-- ===== СТРАНИЦА ПОИСКА МАТЧА (ОЧЕРЕДЬ) ===== -->
+    <div class="page-content" id="matchSearchPage">
+      <h1 class="page-title"><i class="fas fa-search"></i> Поиск матча</h1>
+      <p class="sub-title">Нажмите «Найти матч» несколько раз, чтобы добавить ботов в очередь. Как только будет 10 игроков — матч начнётся автоматически.</p>
+      <div class="queue-status">
+        <div class="count" id="queueCount">0/10</div>
+        <div class="label">Игроков в очереди</div>
+        <div class="queue-actions">
+          <div class="btn-row">
+            <button class="btn-queue" id="queueBtn" onclick="addBotToQueue()">
+              <i class="fas fa-plus"></i> Найти матч
+            </button>
+            <button class="btn-queue leave" id="leaveQueueBtn" onclick="leaveQueueCurrent()" style="display:none;">
+              <i class="fas fa-times"></i> Выйти из очереди
+            </button>
+          </div>
+        </div>
+        <div class="status-text" id="queueStatusText">Нажмите «Найти матч», чтобы добавить бота в очередь</div>
       </div>
     </div>
 
@@ -580,8 +595,8 @@
     </div>
 
     <!-- ===== ПОИСК ИГРОКОВ ===== -->
-    <div class="page-content" id="searchPage">
-      <h1 class="page-title"><i class="fas fa-search"></i> Поиск игроков</h1>
+    <div class="page-content" id="searchPlayersPage">
+      <h1 class="page-title"><i class="fas fa-users"></i> Поиск игроков</h1>
       <p class="sub-title">Найдите игрока по имени и посмотрите его статистику</p>
       <div class="search-container">
         <div class="search-box">
@@ -627,8 +642,9 @@
   let currentUser = null;
   let queue = [];              // массив { id, username }
   let currentMatch = null;     // { terrorists: [...], ct: [...] }
-  let viewingUserId = null;    // ID пользователя, чей профиль смотрим
-  let previousPage = 'mainPage'; // для кнопки "Назад" в профиле
+  let viewingUserId = null;
+  let previousPage = 'mainPage';
+  let botCounter = 0;          // для генерации имён ботов
 
   // ============================================================
   // АУТЕНТИФИКАЦИЯ (упрощённая, данные в localStorage)
@@ -703,57 +719,35 @@
   }
 
   // ============================================================
-  // ОЧЕРЕДЬ
+  // ОЧЕРЕДЬ (бота)
   // ============================================================
-  function isInQueue(userId) {
-    return queue.some(p => p.id === userId);
-  }
-
-  function toggleQueue() {
-    const user = getCurrentUser();
-    if (!user) return showToast('error', 'Ошибка', 'Авторизуйтесь сначала');
-    if (currentMatch) return showToast('info', 'Идёт матч', 'Дождитесь окончания текущего матча');
-
-    if (isInQueue(user.id)) {
-      leaveQueue(user.id);
-    } else {
-      joinQueue(user);
-    }
-  }
-
-  function joinQueue(user) {
-    if (queue.length >= 10) return showToast('error', 'Очередь полна', 'Подождите, пока начнётся матч');
-    if (isInQueue(user.id)) return;
-    queue.push({ id: user.id, username: user.username });
-    showToast('info', 'Вы в очереди', `${queue.length}/10`);
+  function addBotToQueue() {
+    if (currentMatch) return showToast('info', 'Идёт матч', 'Дождитесь окончания');
+    if (queue.length >= 10) return showToast('error', 'Очередь полна', 'Нажмите «Найти матч» позже');
+    botCounter++;
+    const botName = `Bot${botCounter}`;
+    const botId = `bot_${Date.now()}_${botCounter}`;
+    queue.push({ id: botId, username: botName });
+    showToast('info', 'Бот добавлен', `${botName} в очереди (${queue.length}/10)`);
     updateQueueUI();
     if (queue.length === 10) {
       startMatch();
     }
   }
 
-  function leaveQueue(userId) {
-    queue = queue.filter(p => p.id !== userId);
-    showToast('info', 'Вы вышли из очереди', '');
-    updateQueueUI();
-  }
-
-  // Выйти из очереди для текущего пользователя (кнопка)
+  // Выйти из очереди для текущего пользователя (если он там есть)
   function leaveQueueCurrent() {
     const user = getCurrentUser();
     if (!user) return;
-    if (!isInQueue(user.id)) return;
-    leaveQueue(user.id);
-  }
-
-  // Принудительный запуск матча (кнопка "Начать матч")
-  function forceStartMatch() {
-    if (currentMatch) return showToast('info', 'Матч уже идёт', '');
-    if (queue.length < 2) {
-      return showToast('error', 'Недостаточно игроков', 'В очереди должно быть хотя бы 2 игрока');
+    const index = queue.findIndex(p => p.id === user.id);
+    if (index === -1) {
+      // Если текущего пользователя нет в очереди, но кнопка видна — скрываем
+      updateQueueUI();
+      return;
     }
-    // Запускаем матч с текущим составом
-    startMatch();
+    queue.splice(index, 1);
+    showToast('info', 'Вы вышли из очереди', '');
+    updateQueueUI();
   }
 
   function updateQueueUI() {
@@ -761,42 +755,28 @@
     document.getElementById('queueCount').textContent = `${count}/10`;
     const btnFind = document.getElementById('queueBtn');
     const btnLeave = document.getElementById('leaveQueueBtn');
-    const btnStart = document.getElementById('forceStartBtn');
     const status = document.getElementById('queueStatusText');
 
     const user = getCurrentUser();
-    const inQueue = user && isInQueue(user.id);
+    const inQueue = user && queue.some(p => p.id === user.id);
 
-    // Кнопка "Найти матч" / "В очереди"
-    if (inQueue) {
-      btnFind.innerHTML = '<i class="fas fa-check"></i> В очереди';
-      btnFind.className = 'btn-queue';
-      btnFind.disabled = true;
-    } else {
-      btnFind.innerHTML = '<i class="fas fa-search"></i> Найти матч';
-      btnFind.className = 'btn-queue';
-      btnFind.disabled = false;
-    }
+    // Кнопка "Найти матч" всегда активна (добавляет бота)
+    btnFind.innerHTML = '<i class="fas fa-plus"></i> Найти матч';
+    btnFind.className = 'btn-queue';
+    btnFind.disabled = (count >= 10 || currentMatch !== null);
 
-    // Кнопка "Выйти из очереди" — видна только если в очереди
+    // Кнопка "Выйти из очереди" — только если пользователь в очереди
     if (inQueue) {
       btnLeave.style.display = 'inline-flex';
     } else {
       btnLeave.style.display = 'none';
     }
 
-    // Кнопка "Начать матч" доступна, если есть хотя бы 2 игрока и нет матча
-    if (count >= 2 && !currentMatch) {
-      btnStart.disabled = false;
-    } else {
-      btnStart.disabled = true;
-    }
-
     // Текст статуса
     if (currentMatch) {
       status.textContent = 'Матч уже идёт!';
     } else if (count === 0) {
-      status.textContent = 'Нажмите «Найти матч», чтобы присоединиться к очереди';
+      status.textContent = 'Нажмите «Найти матч», чтобы добавить бота в очередь';
     } else {
       status.textContent = `В очереди ${count}/10 игроков. Ожидайте...`;
     }
@@ -812,8 +792,8 @@
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    // Делим на две команды (если игроков меньше 10, делим поровну, но не более 5 в команде)
-    const half = Math.min(5, Math.ceil(shuffled.length / 2));
+    // Делим на две команды (поровну)
+    const half = Math.floor(shuffled.length / 2);
     const terrorists = shuffled.slice(0, half);
     const ct = shuffled.slice(half);
     currentMatch = { terrorists, ct };
@@ -851,9 +831,9 @@
   function endMatch() {
     if (!confirm('Завершить матч?')) return;
     currentMatch = null;
-    showPage('mainPage');
+    showPage('matchSearchPage');
     updateQueueUI();
-    showToast('info', 'Матч завершён', 'Возврат в главное меню');
+    showToast('info', 'Матч завершён', 'Возврат в поиск матча');
   }
 
   // ============================================================
@@ -862,7 +842,7 @@
   function showPage(pageId) {
     document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
     document.getElementById(pageId).classList.add('active');
-    if (pageId === 'mainPage') {
+    if (pageId === 'matchSearchPage') {
       updateQueueUI();
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -881,16 +861,14 @@
   // ============================================================
   function showProfile(userId) {
     if (!userId) {
-      // Показываем свой профиль
       const user = getCurrentUser();
       if (!user) return showToast('error', 'Ошибка', 'Не авторизован');
       viewingUserId = user.id;
-      previousPage = 'mainPage'; // или откуда пришли
+      previousPage = 'mainPage';
     } else {
       viewingUserId = userId;
-      previousPage = 'searchPage';
+      previousPage = 'searchPlayersPage';
     }
-    // Обновляем UI профиля
     loadProfileData(viewingUserId);
     showPage('profilePage');
     document.getElementById('profileSubtitle').textContent = 
@@ -910,7 +888,6 @@
     document.getElementById('profileMatches').textContent = user.matches || 0;
     document.getElementById('profileKills').textContent = user.kills || 0;
     document.getElementById('profileDeaths').textContent = user.deaths || 0;
-    // Обновляем настройки (если это текущий пользователь)
     if (userId === getCurrentUser()?.id) {
       document.getElementById('settingsName').textContent = user.username;
       document.getElementById('settingsStandoffId').textContent = user.standoffId || '—';
@@ -919,8 +896,8 @@
 
   function goBackFromProfile() {
     showPage(previousPage);
-    if (previousPage === 'searchPage') {
-      // обновим результаты поиска, если нужно
+    if (previousPage === 'searchPlayersPage') {
+      // можно обновить результаты
     }
   }
 
@@ -960,7 +937,6 @@
   }
   function changeLanguage(lang) {
     localStorage.setItem('faceit_lang', lang);
-    // Меняем текст меню (можно расширить)
   }
   function loadSettings() {
     const theme = localStorage.getItem('faceit_theme') || 'orange';
@@ -999,7 +975,6 @@
       document.getElementById('authPage').style.display = 'none';
       document.getElementById('mainSite').classList.add('visible');
       document.getElementById('header').style.display = 'block';
-      // Загружаем профиль текущего пользователя в настройки
       loadProfileData(user.id);
       loadSettings();
       updateQueueUI();
@@ -1023,7 +998,6 @@
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
     document.getElementById('registerBtn').addEventListener('click', handleRegister);
     document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
-    // Поиск по Enter
     document.getElementById('searchInput').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') searchPlayers();
     });
@@ -1037,13 +1011,12 @@
       }
     });
 
-    // Создаём тестовых пользователей, если их нет
+    // Создаём тестовых пользователей
     let users = getUsers();
     if (users.length === 0) {
       users = [
         { id: '1', username: 'Admin', standoffId: '123', password: 'admin123', matches: 0, kills: 0, deaths: 0 },
-        { id: '2', username: 'Player1', standoffId: '456', password: 'player123', matches: 0, kills: 0, deaths: 0 },
-        { id: '3', username: 'Player2', standoffId: '789', password: 'player123', matches: 0, kills: 0, deaths: 0 }
+        { id: '2', username: 'Player1', standoffId: '456', password: 'player123', matches: 0, kills: 0, deaths: 0 }
       ];
       saveUsers(users);
     }
